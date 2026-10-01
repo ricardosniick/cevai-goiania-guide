@@ -4,12 +4,15 @@ import {
   Coffee, Heart, Hotel, Map, MapPin, MoreHorizontal, Navigation, Plus,
   Search, Send, Share2, ShoppingBag, Star, Trees, Utensils, X,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import goianiaHero from "@/assets/goiania-hero.jpg";
 import restaurantBaru from "@/assets/restaurant-baru.jpg";
 import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
 import parqueFlamboyant from "@/assets/parque-flamboyant.jpg";
+import googleRestaurant from "@/assets/google-place-restaurant.jpg";
+import googlePark from "@/assets/google-place-park.jpg";
+import googleHotel from "@/assets/google-place-hotel.jpg";
 
 type Screen = "welcome" | "home" | "map" | "detail" | "saved" | "profile";
 type MainScreen = "home" | "map" | "saved" | "profile";
@@ -22,11 +25,26 @@ type Place = {
   rating: string;
   reviews: number;
   image: string;
+  officialPhotos: string[];
+  googlePlaceId: string;
   description: string;
   price: string;
   x: string;
   y: string;
 };
+type DiaryEntry = {
+  id: string;
+  placeId: string;
+  placeName: string;
+  location: string;
+  category: Exclude<Category, "Todos">;
+  review: string;
+  rating: number;
+  wouldReturn: boolean;
+  photo: string | null;
+  createdAt: string;
+};
+type ExperienceDraft = Omit<DiaryEntry, "id" | "createdAt" | "placeId">;
 
 const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Utensils; tone: string }> = [
   { name: "Restaurantes", icon: Utensils, tone: "bg-secondary text-secondary-foreground" },
@@ -37,11 +55,11 @@ const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Ut
 ];
 
 const places: Place[] = [
-  { id: "baru", name: "Restaurante Baru", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: restaurantBaru, description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
-  { id: "biscoito", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
-  { id: "flamboyant", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: parqueFlamboyant, description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
-  { id: "hotel", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: goianiaHero, description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
-  { id: "cerrado", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
+  { id: "baru", googlePlaceId: "ChIJ-simulado-baru-goiania", name: "Restaurante Baru", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: googleRestaurant, officialPhotos: [googleRestaurant, restaurantBaru, cafeBiscoito], description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
+  { id: "biscoito", googlePlaceId: "ChIJ-simulado-cafe-goiania", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, officialPhotos: [cafeBiscoito, googleRestaurant], description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
+  { id: "flamboyant", googlePlaceId: "ChIJ-simulado-parque-goiania", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: googlePark, officialPhotos: [googlePark, parqueFlamboyant, goianiaHero], description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
+  { id: "hotel", googlePlaceId: "ChIJ-simulado-hotel-goiania", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: googleHotel, officialPhotos: [googleHotel, goianiaHero], description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
+  { id: "cerrado", googlePlaceId: "ChIJ-simulado-loja-goiania", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, officialPhotos: [restaurantBaru, googleRestaurant], description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
 ];
 
 const initialPlace: Place = places[0] ?? {
@@ -52,6 +70,8 @@ const initialPlace: Place = places[0] ?? {
   rating: "4.8",
   reviews: 321,
   image: restaurantBaru,
+  officialPhotos: [restaurantBaru],
+  googlePlaceId: "ChIJ-simulado-baru-goiania",
   description: "Cozinha brasileira contemporânea no coração do Marista.",
   price: "$$",
   x: "28%",
@@ -86,8 +106,18 @@ function CeVaiApp() {
   const [activeCategory, setActiveCategory] = useState<Category>("Todos");
   const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("ce-vai-diary");
+      if (stored) setDiaryEntries(JSON.parse(stored) as DiaryEntry[]);
+    } catch {
+      window.localStorage.removeItem("ce-vai-diary");
+    }
+  }, []);
 
   const notify = (message: string) => {
     window.clearTimeout(toastTimer.current);
@@ -111,6 +141,15 @@ function CeVaiApp() {
     });
     notify(savedIds.has(place.id) ? "Removido dos salvos" : "Lugar salvo!");
   };
+  const publishExperience = (draft: ExperienceDraft) => {
+    const matchedPlace = places.find((place) => place.name.toLocaleLowerCase() === draft.placeName.trim().toLocaleLowerCase()) ?? selectedPlace;
+    const entry: DiaryEntry = { ...draft, id: `${Date.now()}`, placeId: matchedPlace.id, createdAt: new Date().toISOString() };
+    const nextEntries = [entry, ...diaryEntries];
+    setDiaryEntries(nextEntries);
+    window.localStorage.setItem("ce-vai-diary", JSON.stringify(nextEntries));
+    setModalOpen(false);
+    notify("Experiência salva no seu diário!");
+  };
 
   return (
     <main className="min-h-dvh bg-primary/5 p-0 sm:grid sm:place-items-center sm:p-7">
@@ -119,11 +158,11 @@ function CeVaiApp() {
           {screen === "welcome" && <WelcomeScreen onEnter={() => go("home")} />}
           {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
           {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
-          {screen === "detail" && <DetailScreen place={selectedPlace} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
+          {screen === "detail" && <DetailScreen place={selectedPlace} communityEntries={diaryEntries.filter((entry) => entry.placeId === selectedPlace.id)} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
           {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} onSave={toggleSaved} />}
-          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
+          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} diaryEntries={diaryEntries} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
         </div>
-        {modalOpen && <ExperienceModal onClose={() => setModalOpen(false)} onPublish={() => { setModalOpen(false); notify("Experiência publicada!"); }} />}
+        {modalOpen && <ExperienceModal initialPlace={selectedPlace} onClose={() => setModalOpen(false)} onPublish={publishExperience} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
       </div>
     </main>
@@ -167,17 +206,18 @@ function MapScreen({ active, onCategory, onNavigate, onAdd, onDetail }: { active
   </section>;
 }
 
-function DetailScreen({ place, saved, onBack, onSave, onGo, onShare }: { place: Place; saved: boolean; onBack: () => void; onSave: () => void; onGo: () => void; onShare: () => void }) {
+function DetailScreen({ place, communityEntries, saved, onBack, onSave, onGo, onShare }: { place: Place; communityEntries: DiaryEntry[]; saved: boolean; onBack: () => void; onSave: () => void; onGo: () => void; onShare: () => void }) {
   const [tab, setTab] = useState("Sobre");
   return <section className="h-dvh overflow-y-auto bg-background pb-24 sm:h-[838px]"><StatusBar light /><div className="relative h-64"><img src={place.image} width={1200} height={704} alt={place.name} className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-b from-foreground/30 to-transparent" /><div className="absolute left-4 right-4 top-12 flex justify-between"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full bg-background/90 text-foreground hover:bg-background"><ArrowLeft size={20} /></Button><div className="flex gap-2"><Button variant="ghost" size="icon" aria-label="Compartilhar" onClick={onShare} className="rounded-full bg-background/90 text-foreground hover:bg-background"><Share2 size={18} /></Button><Button variant="ghost" size="icon" aria-label="Mais opções" className="rounded-full bg-background/90 text-foreground hover:bg-background"><MoreHorizontal size={20} /></Button></div></div></div>
     <div className="px-5 pt-5"><div className="flex items-start justify-between gap-3"><div><h1 className="font-display text-2xl font-black">{place.name}</h1><p className="mt-1 flex items-center gap-1 text-sm"><Star size={15} className="fill-secondary text-secondary" /><b>{place.rating}</b> ({place.reviews} avaliações)</p></div><Button variant="ghost" onClick={onGo} className="h-auto rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-primary hover:bg-emerald-50">Ver no mapa</Button></div><p className="mt-2 text-xs text-muted-foreground">{place.price} · {place.category.replace(/s$/, "")} · {place.area}</p></div>
-    <div className="mt-5 flex border-b border-border px-4">{["Sobre", "Avaliações", "Fotos", "Dicas"].map((name) => <Button variant="ghost" key={name} onClick={() => setTab(name)} className={`h-11 flex-1 rounded-none border-b-2 px-1 text-xs hover:bg-transparent ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div><DetailTab key={tab} tab={tab} place={place} />
+    <div className="mt-5 flex border-b border-border px-4">{["Sobre", "Avaliações", "Fotos", "Dicas"].map((name) => <Button variant="ghost" key={name} onClick={() => setTab(name)} className={`h-11 flex-1 rounded-none border-b-2 px-1 text-xs hover:bg-transparent ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div><DetailTab key={tab} tab={tab} place={place} communityEntries={communityEntries} />
     <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.35fr] gap-3 border-t border-border bg-background px-4 py-3"><Button variant="outline" onClick={onSave} className="gap-2 rounded-full border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none"} />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Send size={17} />Quero ir</Button></div>
   </section>;
 }
 
-function DetailTab({ tab, place }: { tab: string; place: Place }) {
-  return <div className="animate-tab-in px-5 py-5">{tab === "Sobre" && <><p className="text-sm leading-relaxed">{place.description}</p><div className="mt-5 rounded-2xl bg-card p-4 shadow-sm"><b className="text-sm">Informações</b><p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={15} />{place.area}, Goiânia</p></div></>}{tab === "Avaliações" && <><h2 className="font-display text-base font-black">O que estão dizendo</h2><div className="mt-3 flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Experiência incrível e ambiente muito agradável!</p></div></div></>}{tab === "Fotos" && <div className="grid grid-cols-2 gap-2"><img src={place.image} alt={place.name} className="col-span-2 aspect-[2/1] w-full rounded-xl object-cover" /><img src={cafeBiscoito} alt="Detalhe do local" className="aspect-square w-full rounded-xl object-cover" /><img src={parqueFlamboyant} alt="Ambiente do local" className="aspect-square w-full rounded-xl object-cover" /></div>}{tab === "Dicas" && <div className="space-y-3"><Tip initials="JS" text="Chegue um pouco antes do pôr do sol." /><Tip initials="AC" text="Durante a semana é mais tranquilo." /></div>}</div>;
+function DetailTab({ tab, place, communityEntries }: { tab: string; place: Place; communityEntries: DiaryEntry[] }) {
+  const communityPhotos = communityEntries.filter((entry) => entry.photo);
+  return <div className="animate-tab-in px-5 py-5">{tab === "Sobre" && <><p className="text-sm leading-relaxed">{place.description}</p><div className="mt-5 rounded-2xl bg-card p-4 shadow-sm"><b className="text-sm">Informações</b><p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={15} />{place.area}, Goiânia</p><p className="mt-2 text-[10px] text-muted-foreground">Dados simulados no formato Google Places · ID {place.googlePlaceId}</p></div></>}{tab === "Avaliações" && <><h2 className="font-display text-base font-black">O que estão dizendo</h2><div className="mt-3 flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Experiência incrível e ambiente muito agradável!</p></div></div></>}{tab === "Fotos" && <div><div className="flex items-center justify-between"><h2 className="font-display text-base font-black">Fotos oficiais</h2><span className="rounded-full bg-muted px-2 py-1 text-[9px] font-bold text-muted-foreground">Google Places</span></div><div className="mt-3 grid grid-cols-2 gap-2">{place.officialPhotos.map((photo, index) => <img key={photo} src={photo} loading="lazy" width={1200} height={800} alt={`Foto oficial ${index + 1} de ${place.name}`} className={`${index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square"} w-full rounded-xl object-cover`} />)}</div><h2 className="mt-7 font-display text-base font-black">Comunidade / Diário</h2>{communityPhotos.length ? <div className="mt-3 grid grid-cols-2 gap-2">{communityPhotos.map((entry) => <figure key={entry.id} className="overflow-hidden rounded-xl bg-card"><img src={entry.photo ?? ""} alt={`Registro da comunidade em ${place.name}`} className="aspect-square w-full object-cover" /><figcaption className="p-2 text-[10px] text-muted-foreground">Seu diário · {entry.rating} ★</figcaption></figure>)}</div> : <p className="mt-3 rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground">As fotos registradas pela comunidade aparecem aqui.</p>}</div>}{tab === "Dicas" && <div className="space-y-3"><Tip initials="JS" text="Chegue um pouco antes do pôr do sol." /><Tip initials="AC" text="Durante a semana é mais tranquilo." /></div>}</div>;
 }
 
 function Tip({ initials, text }: { initials: string; text: string }) { return <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">{initials}</span><p className="pt-1 text-sm">{text}</p></div>; }
@@ -186,19 +226,19 @@ function SavedScreen({ savedPlaces, onNavigate, onAdd, onDetail, onSave }: { sav
   return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /><h1 className="mt-6 font-display text-2xl font-black">Seus lugares salvos</h1><p className="mt-1 text-sm text-muted-foreground">Volte quando quiser aos seus favoritos.</p></header><div className="mx-5 mt-5 grid gap-3">{savedPlaces.length ? savedPlaces.map((place) => <PlaceCard key={place.id} place={place} saved onOpen={() => onDetail(place)} onSave={() => onSave(place)} />) : <EmptyState title="Nada salvo ainda" text="Toque no coração de um lugar para encontrá-lo aqui." />}</div><BottomNav active="saved" onNavigate={onNavigate} onAdd={onAdd} /></section>;
 }
 
-function ProfileScreen({ savedCount, onNavigate, onAdd }: { savedCount: number; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
-  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /></header><div className="mt-8 flex flex-col items-center px-5 text-center"><div className="grid size-24 place-items-center rounded-full bg-primary text-3xl font-black text-primary-foreground">R</div><h1 className="mt-4 font-display text-2xl font-black">Ricardo</h1><p className="text-sm text-muted-foreground">Explorador de Goiânia</p><div className="mt-7 grid w-full grid-cols-3 divide-x divide-border rounded-2xl bg-card p-4 shadow-sm"><ProfileStat value="12" label="Registros" /><ProfileStat value={String(savedCount)} label="Salvos" /><ProfileStat value="8" label="Dicas" /></div><Button variant="outline" className="mt-5 w-full rounded-full border-primary text-primary">Editar perfil</Button></div><BottomNav active="profile" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+function ProfileScreen({ savedCount, diaryEntries, onNavigate, onAdd }: { savedCount: number; diaryEntries: DiaryEntry[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
+  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /></header><div className="mt-5 flex flex-col items-center px-5 text-center"><div className="grid size-20 place-items-center rounded-full bg-primary text-2xl font-black text-primary-foreground">R</div><h1 className="mt-3 font-display text-xl font-black">Ricardo</h1><p className="text-xs text-muted-foreground">Explorador de Goiânia</p><div className="mt-5 grid w-full grid-cols-3 divide-x divide-border rounded-2xl bg-card p-4 shadow-sm"><ProfileStat value={String(diaryEntries.length)} label="Registros" /><ProfileStat value={String(savedCount)} label="Salvos" /><ProfileStat value={String(diaryEntries.filter((entry) => entry.review).length)} label="Dicas" /></div></div><div className="mt-6 px-5"><div className="flex items-end justify-between"><h2 className="font-display text-lg font-black">Meu diário</h2><span className="text-[10px] text-muted-foreground">Só neste aparelho</span></div>{diaryEntries.length ? <div className="mt-3 grid gap-3">{diaryEntries.map((entry) => <article key={entry.id} className="grid grid-cols-[88px_1fr] overflow-hidden rounded-2xl bg-card shadow-sm">{entry.photo ? <img src={entry.photo} alt={`Experiência em ${entry.placeName}`} className="h-full min-h-24 w-full object-cover" /> : <div className="grid min-h-24 place-items-center bg-muted"><Camera className="text-muted-foreground" /></div>}<div className="min-w-0 p-3"><b className="block truncate text-sm">{entry.placeName}</b><p className="mt-1 text-[11px] text-secondary">{"★".repeat(entry.rating)}<span className="text-muted-foreground"> · {entry.wouldReturn ? "Voltaria" : "Não voltaria"}</span></p><p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{entry.review || entry.location}</p></div></article>)}</div> : <EmptyState title="Seu diário está vazio" text="Registre uma experiência pelo botão +." />}</div><BottomNav active="profile" onNavigate={onNavigate} onAdd={onAdd} /></section>;
 }
 
 function ProfileStat({ value, label }: { value: string; label: string }) { return <div><b className="block font-display text-xl text-primary">{value}</b><small className="text-muted-foreground">{label}</small></div>; }
 function EmptyState({ title, text }: { title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center"><Heart className="mx-auto text-muted-foreground" /><b className="mt-3 block text-sm">{title}</b><p className="mt-1 text-xs text-muted-foreground">{text}</p></div>; }
 
-function ExperienceModal({ onClose, onPublish }: { onClose: () => void; onPublish: () => void }) {
-  const [category, setCategory] = useState<Exclude<Category, "Todos">>("Restaurantes");
+function ExperienceModal({ initialPlace, onClose, onPublish }: { initialPlace: Place; onClose: () => void; onPublish: (draft: ExperienceDraft) => void }) {
+  const [category, setCategory] = useState<Exclude<Category, "Todos">>(initialPlace.category);
   const [wouldReturn, setWouldReturn] = useState(true);
   const [review, setReview] = useState("");
-  const [placeName, setPlaceName] = useState("");
-  const [location, setLocation] = useState("");
+  const [placeName, setPlaceName] = useState(initialPlace.name);
+  const [location, setLocation] = useState(initialPlace.area);
   const [rating, setRating] = useState(0);
   const [photo, setPhoto] = useState<string | null>(null);
   const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : null); reader.readAsDataURL(file); };
@@ -207,5 +247,5 @@ function ExperienceModal({ onClose, onPublish }: { onClose: () => void; onPublis
     <label className="relative mt-3 grid h-28 cursor-pointer place-items-center overflow-hidden rounded-2xl border border-dashed border-border bg-card text-center"><input onChange={handlePhoto} type="file" accept="image/*" className="sr-only" />{photo ? <><img src={photo} alt="Prévia da foto selecionada" className="h-full w-full object-cover" /><span className="absolute rounded-full bg-background/90 px-3 py-1 text-[10px] font-bold">Trocar foto</span></> : <span><span className="mx-auto grid size-9 place-items-center rounded-full bg-background shadow"><Camera size={18} /></span><b className="mt-2 block text-xs">Adicionar foto</b><small className="text-muted-foreground">Escolha uma imagem</small></span>}</label>
     <div className="mt-4 space-y-3"><input value={placeName} onChange={(event) => setPlaceName(event.target.value)} aria-label="Nome do lugar" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Qual é o nome do lugar?" /><div className="relative"><input value={location} onChange={(event) => setLocation(event.target.value)} aria-label="Localização" className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Onde fica?" /><MapPin className="absolute right-4 top-4 text-muted-foreground" size={17} /></div><div className="relative"><textarea aria-label="Sua experiência" value={review} onChange={(event) => setReview(event.target.value.slice(0, 500))} className="h-28 w-full resize-none rounded-xl border border-input bg-card p-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Conte sua experiência..." /><span className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">{review.length}/500</span></div></div>
     <div className="mt-5 flex items-center justify-between border-b border-border pb-5"><b className="text-sm">Como foi?</b><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <Button variant="ghost" size="icon" aria-label={`${n} estrelas`} key={n} onClick={() => setRating(n)} className={`size-7 p-0 ${n <= rating ? "text-secondary" : "text-muted-foreground"}`}><Star size={21} fill={n <= rating ? "currentColor" : "none"} /></Button>)}</div></div><div className="flex items-center justify-between py-5"><div><b className="text-sm">Voltaria?</b><p className="text-[11px] text-muted-foreground">Você voltaria a este lugar?</p></div><Button role="switch" aria-checked={wouldReturn} aria-label="Voltaria" onClick={() => setWouldReturn((value) => !value)} className={`h-7 w-12 justify-start rounded-full p-1 ${wouldReturn ? "bg-primary" : "bg-muted"}`}><span className={`size-5 rounded-full bg-background shadow transition-transform ${wouldReturn ? "translate-x-5" : "translate-x-0"}`} /></Button></div>
-  </div><div className="shrink-0 border-t border-border p-4"><Button disabled={!placeName.trim() || !location.trim()} onClick={onPublish} className="h-12 w-full rounded-full bg-primary text-primary-foreground">Publicar</Button></div></section></div>;
+  </div><div className="shrink-0 border-t border-border p-4"><Button disabled={!placeName.trim() || !location.trim()} onClick={() => onPublish({ placeName: placeName.trim(), location: location.trim(), category, review, rating, wouldReturn, photo })} className="h-12 w-full rounded-full bg-primary text-primary-foreground">Salvar no diário</Button></div></section></div>;
 }
