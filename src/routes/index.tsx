@@ -111,6 +111,8 @@ function CeVaiApp() {
   const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [profileName, setProfileName] = useState("Ricardo");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
 
@@ -121,6 +123,11 @@ function CeVaiApp() {
     } catch {
       window.localStorage.removeItem("ce-vai-diary");
     }
+  }, []);
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
+    return () => data.subscription.unsubscribe();
   }, []);
 
   const notify = (message: string) => {
@@ -154,17 +161,29 @@ function CeVaiApp() {
     setModalOpen(false);
     notify("Experiência salva no seu diário!");
   };
+  const saveProfile = async (nextUser: User, fullName: string) => {
+    setUser(nextUser);
+    setProfileName(fullName || nextUser.user_metadata?.full_name || nextUser.email?.split("@")[0] || "Explorador");
+    const { error } = await supabase.from("profiles").upsert({ user_id: nextUser.id, full_name: fullName || nextUser.user_metadata?.full_name || "" }, { onConflict: "user_id" });
+    if (error) notify("Conta criada, mas o perfil não foi atualizado.");
+  };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    go("welcome", true);
+  };
 
   return (
     <main className="min-h-dvh bg-primary/5 p-0 sm:grid sm:place-items-center sm:p-7">
       <div className="relative h-dvh w-full overflow-hidden bg-background sm:h-[852px] sm:max-h-[calc(100vh-3.5rem)] sm:w-[393px] sm:rounded-[2.6rem] sm:border-[7px] sm:border-foreground sm:shadow-2xl">
         <div key={screen} className={direction === "back" ? "animate-screen-back" : "animate-screen-in"}>
-          {screen === "welcome" && <WelcomeScreen onEnter={() => go("home")} />}
+          {screen === "welcome" && <WelcomeScreen onAuth={() => go("auth")} onExplore={() => go("home")} />}
+          {screen === "auth" && <AuthScreen onBack={() => go("welcome", true)} onSuccess={(nextUser, name) => { void saveProfile(nextUser, name); go("home"); }} notify={notify} />}
           {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
           {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
           {screen === "detail" && <DetailScreen place={selectedPlace} communityEntries={diaryEntries.filter((entry) => entry.placeId === selectedPlace.id)} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
           {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} onSave={toggleSaved} />}
-          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} diaryEntries={diaryEntries} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
+          {screen === "profile" && <ProfileScreen name={profileName} email={user?.email ?? null} savedCount={savedIds.size} diaryEntries={diaryEntries} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onSignOut={user ? signOut : () => go("auth")} />}
         </div>
         {modalOpen && <ExperienceModal initialPlace={selectedPlace} onClose={() => setModalOpen(false)} onPublish={publishExperience} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
@@ -173,8 +192,8 @@ function CeVaiApp() {
   );
 }
 
-function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
-  return <section className="relative h-dvh overflow-hidden bg-primary sm:h-[838px]"><StatusBar light /><img src={goianiaHero} width={768} height={1376} className="h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" /><div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-primary/85" /><div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-7 text-center text-primary-foreground"><Logo light /><p className="mt-5 font-display text-xl font-extrabold leading-tight">Descubra.<br />Vive.<br />Registra.</p><div className="mt-10 space-y-3"><Button onClick={onEnter} className="h-12 w-full rounded-full bg-primary text-primary-foreground shadow-lg">Criar conta</Button><Button variant="outline" onClick={onEnter} className="h-12 w-full rounded-full border-primary-foreground/40 bg-background/90 text-primary backdrop-blur">Entrar</Button></div><p className="mt-6 text-[10px] font-semibold opacity-80">Explorando o que Goiânia tem de melhor ♥</p></div></section>;
+function WelcomeScreen({ onAuth, onExplore }: { onAuth: () => void; onExplore: () => void }) {
+  return <section className="relative h-dvh min-h-0 overflow-y-auto bg-primary sm:h-[838px]"><StatusBar light /><div className="relative flex min-h-full flex-col justify-end"><img src={goianiaHero} width={768} height={1376} className="absolute inset-0 h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" /><div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/20 to-primary/90" /><div className="relative z-10 flex min-h-[610px] flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-16 text-center text-primary-foreground"><Logo light /><p className="mx-auto mt-4 max-w-xs font-display text-lg font-extrabold leading-snug">O mapa das suas escolhas.</p><p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-primary-foreground/85">Onde você foi e se vale a pena voltar.</p><div className="mt-7 space-y-3"><Button onClick={onAuth} className="h-12 w-full rounded-full bg-primary text-primary-foreground shadow-lg">Criar conta</Button><Button variant="outline" onClick={onAuth} className="h-12 w-full rounded-full border-primary-foreground/50 bg-background/90 text-primary backdrop-blur">Entrar</Button><Button variant="ghost" onClick={onExplore} className="h-9 text-xs text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Explorar sem entrar</Button></div></div></div></section>;
 }
 
 function HomeScreen({ activeCategory, savedIds, onCategory, onDetail, onNavigate, onSave, onAdd }: { activeCategory: Category; savedIds: Set<string>; onCategory: (category: Category) => void; onDetail: (place: Place) => void; onNavigate: (screen: MainScreen) => void; onSave: (place: Place) => void; onAdd: () => void }) {
