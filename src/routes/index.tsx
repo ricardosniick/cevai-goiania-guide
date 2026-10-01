@@ -120,7 +120,7 @@ function CeVaiApp() {
           {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
           {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
           {screen === "detail" && <DetailScreen place={selectedPlace} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
-          {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} />}
+          {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} onSave={toggleSaved} />}
           {screen === "profile" && <ProfileScreen savedCount={savedIds.size} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
         </div>
         {modalOpen && <ExperienceModal onClose={() => setModalOpen(false)} onPublish={() => { setModalOpen(false); notify("Experiência publicada!"); }} />}
@@ -182,8 +182,8 @@ function DetailTab({ tab, place }: { tab: string; place: Place }) {
 
 function Tip({ initials, text }: { initials: string; text: string }) { return <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">{initials}</span><p className="pt-1 text-sm">{text}</p></div>; }
 
-function SavedScreen({ savedPlaces, onNavigate, onAdd, onDetail }: { savedPlaces: Place[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
-  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /><h1 className="mt-6 font-display text-2xl font-black">Seus lugares salvos</h1><p className="mt-1 text-sm text-muted-foreground">Volte quando quiser aos seus favoritos.</p></header><div className="mx-5 mt-5 grid gap-3">{savedPlaces.length ? savedPlaces.map((place) => <PlaceCard key={place.id} place={place} saved onOpen={() => onDetail(place)} onSave={() => undefined} />) : <EmptyState title="Nada salvo ainda" text="Toque no coração de um lugar para encontrá-lo aqui." />}</div><BottomNav active="saved" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+function SavedScreen({ savedPlaces, onNavigate, onAdd, onDetail, onSave }: { savedPlaces: Place[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void; onSave: (place: Place) => void }) {
+  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /><h1 className="mt-6 font-display text-2xl font-black">Seus lugares salvos</h1><p className="mt-1 text-sm text-muted-foreground">Volte quando quiser aos seus favoritos.</p></header><div className="mx-5 mt-5 grid gap-3">{savedPlaces.length ? savedPlaces.map((place) => <PlaceCard key={place.id} place={place} saved onOpen={() => onDetail(place)} onSave={() => onSave(place)} />) : <EmptyState title="Nada salvo ainda" text="Toque no coração de um lugar para encontrá-lo aqui." />}</div><BottomNav active="saved" onNavigate={onNavigate} onAdd={onAdd} /></section>;
 }
 
 function ProfileScreen({ savedCount, onNavigate, onAdd }: { savedCount: number; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
