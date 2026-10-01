@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, Bell, Bookmark, Building2, Camera, Check, ChevronRight,
+  ArrowLeft, Bell, Bookmark, Camera, Check, ChevronRight,
   CircleUserRound, Coffee, Heart, Hotel, Map, MapPin, MoreHorizontal,
-  Navigation, Park, Plus, Search, Send, Share2, ShoppingBag, Star, Store,
+  Navigation, Plus, Search, Send, Share2, ShoppingBag, Star,
   Trees, Utensils, X,
 } from "lucide-react";
-import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes } from "react";
 import goianiaHero from "@/assets/goiania-hero.jpg";
 import restaurantBaru from "@/assets/restaurant-baru.jpg";
 import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
@@ -128,7 +128,7 @@ function BottomNav({ active, onHome, onMap, onAdd }: { active: "home" | "map"; o
   return <nav className="absolute inset-x-0 bottom-0 z-20 grid h-[78px] grid-cols-5 items-center border-t border-border bg-background/95 px-3 pb-2 backdrop-blur"><Button onClick={onHome} className={`${item} ${active === "home" ? "text-primary" : "text-muted-foreground"}`}><MapPin size={20} fill={active === "home" ? "currentColor" : "none"} />Explorar</Button><Button onClick={onMap} className={`${item} ${active === "map" ? "text-primary" : "text-muted-foreground"}`}><Map size={20} />Mapa</Button><Button aria-label="Registrar experiência" onClick={onAdd} className="mx-auto size-14 -translate-y-3 rounded-full bg-primary text-primary-foreground shadow-lg"><Plus size={28} /></Button><Button className={`${item} text-muted-foreground`}><Heart size={20} />Salvos</Button><Button className={`${item} text-muted-foreground`}><CircleUserRound size={20} />Perfil</Button></nav>;
 }
 
-function MapScreen({ active, onCategory, onHome, onMap: _onMap, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onHome: () => void; onMap?: () => void; onAdd: () => void; onDetail: () => void }) {
+function MapScreen({ active, onCategory, onHome, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onHome: () => void; onAdd: () => void; onDetail: () => void }) {
   const pins = [
     { x: "28%", y: "31%", label: "Setor Marista", tone: "bg-secondary", Icon: Utensils },
     { x: "59%", y: "42%", label: "Setor Bueno", tone: "bg-amber-700", Icon: Coffee },
@@ -155,7 +155,7 @@ function DetailScreen({ saved, onBack, onSave, onGo }: { saved: boolean; onBack:
     <div className="px-5 pt-5"><div className="flex items-start justify-between gap-3"><div><h1 className="font-display text-2xl font-black">Restaurante Baru</h1><p className="mt-1 flex items-center gap-1 text-sm"><Star size={15} className="fill-secondary text-secondary" /><b>4.8</b> (321 avaliações)</p></div><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-primary">Ver no mapa</span></div><p className="mt-2 text-xs text-muted-foreground">$$ · Restaurante · Setor Marista</p></div>
     <div className="mt-5 flex border-b border-border px-4">{["Sobre", "Avaliações", "Fotos", "Dicas"].map((name) => <Button key={name} onClick={() => setTab(name)} className={`h-11 flex-1 border-b-2 text-xs ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div>
     <div className="animate-screen-in px-5 py-5" key={tab}>{tab === "Sobre" && <><div className="grid grid-cols-3 gap-2"><img src={cafeBiscoito} loading="lazy" alt="Prato do Baru" className="aspect-square w-full rounded-xl object-cover" /><img src={parqueFlamboyant} loading="lazy" alt="Área externa" className="aspect-square w-full rounded-xl object-cover" /><img src={restaurantBaru} loading="lazy" alt="Ambiente do restaurante" className="aspect-square w-full rounded-xl object-cover" /></div><p className="mt-4 text-sm leading-relaxed">Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.</p><h2 className="mt-6 font-display text-base font-black">Avaliações recentes</h2><div className="mt-3 flex gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Comida incrível e ambiente muito agradável!</p></div></div></>}{tab !== "Sobre" && <div className="py-14 text-center text-sm text-muted-foreground">Conteúdo de {tab.toLowerCase()} em breve.</div>}</div>
-    <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.35fr] gap-3 border-t border-border bg-background px-4 py-3"><Button onClick={onSave} className="gap-2 rounded-full border border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none" />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Send size={17} />Quero ir</Button></div>
+    <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.35fr] gap-3 border-t border-border bg-background px-4 py-3"><Button onClick={onSave} className="gap-2 rounded-full border border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none"} />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Send size={17} />Quero ir</Button></div>
   </section>;
 }
 
