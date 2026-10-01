@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Keep the mobile experience as a single state-driven route; this preserves app-like transitions without unnecessary URL changes.
+- Keep diary entries in browser-local storage until account-based sync is requested; this preserves the current no-login experience.
