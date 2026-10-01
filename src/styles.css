@@ -156,14 +156,37 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes screen-back {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes tab-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(36px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @utility animate-screen-in { animation: screen-in 280ms ease-out both; }
+@utility animate-screen-back { animation: screen-back 280ms ease-out both; }
+@utility animate-tab-in { animation: tab-in 220ms ease-out both; }
+@utility animate-toast-in { animation: toast-in 180ms ease-out both; }
 @utility animate-modal-in { animation: modal-in 240ms ease-out both; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+.map-pattern {
+  background-image: linear-gradient(28deg, transparent 46%, var(--border) 47%, var(--border) 49%, transparent 50%), linear-gradient(112deg, transparent 45%, var(--card) 46%, var(--card) 52%, transparent 53%);
+  background-size: 92px 78px, 120px 105px;
 }

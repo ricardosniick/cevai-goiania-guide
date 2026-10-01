@@ -1,25 +1,47 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, Bell, Bookmark, Camera, Check, ChevronRight,
-  CircleUserRound, Coffee, Heart, Hotel, Map, MapPin, MoreHorizontal,
-  Navigation, Plus, Search, Send, Share2, ShoppingBag, Star,
-  Trees, Utensils, X,
+  ArrowLeft, Bell, Bookmark, Camera, Check, ChevronRight, CircleUserRound,
+  Coffee, Heart, Hotel, Map, MapPin, MoreHorizontal, Navigation, Plus,
+  Search, Send, Share2, ShoppingBag, Star, Trees, Utensils, X,
 } from "lucide-react";
-import { useState, type ButtonHTMLAttributes } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Button } from "@/components/ui/button";
 import goianiaHero from "@/assets/goiania-hero.jpg";
 import restaurantBaru from "@/assets/restaurant-baru.jpg";
 import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
 import parqueFlamboyant from "@/assets/parque-flamboyant.jpg";
 
-type Screen = "welcome" | "home" | "map" | "detail";
+type Screen = "welcome" | "home" | "map" | "detail" | "saved" | "profile";
+type MainScreen = "home" | "map" | "saved" | "profile";
 type Category = "Todos" | "Restaurantes" | "Cafés" | "Parques" | "Hotéis" | "Lojas";
+type Place = {
+  id: string;
+  name: string;
+  category: Exclude<Category, "Todos">;
+  area: string;
+  rating: string;
+  reviews: number;
+  image: string;
+  description: string;
+  price: string;
+  x: string;
+  y: string;
+};
 
-const categories: Array<{ name: Category; icon: typeof Utensils; tone: string }> = [
+const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Utensils; tone: string }> = [
   { name: "Restaurantes", icon: Utensils, tone: "bg-secondary text-secondary-foreground" },
   { name: "Cafés", icon: Coffee, tone: "bg-amber-100 text-amber-800" },
   { name: "Parques", icon: Trees, tone: "bg-emerald-100 text-emerald-700" },
   { name: "Hotéis", icon: Hotel, tone: "bg-sky-100 text-sky-700" },
-  { name: "Lojas", icon: ShoppingBag, tone: "bg-violet-100 text-violet-700" },
+  { name: "Lojas", icon: ShoppingBag, tone: "bg-rose-100 text-rose-700" },
+];
+
+const places: Place[] = [
+  { id: "baru", name: "Restaurante Baru", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: restaurantBaru, description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
+  { id: "biscoito", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
+  { id: "flamboyant", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: parqueFlamboyant, description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
+  { id: "hotel", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: goianiaHero, description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
+  { id: "cerrado", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
 ];
 
 export const Route = createFileRoute("/")({
@@ -34,16 +56,8 @@ export const Route = createFileRoute("/")({
   component: CeVaiApp,
 });
 
-function Button({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button className={`inline-flex items-center justify-center font-bold transition active:scale-[.98] disabled:opacity-50 ${className}`} {...props} />;
-}
-
 function Logo({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
-  return (
-    <div className={`font-display font-black tracking-normal ${compact ? "text-3xl" : "text-6xl"} ${light ? "text-primary-foreground" : "text-primary"}`}>
-      Cê <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span>
-    </div>
-  );
+  return <div className={`font-display font-black tracking-normal ${compact ? "text-3xl" : "text-6xl"} ${light ? "text-primary-foreground" : "text-primary"}`}>Cê <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span></div>;
 }
 
 function StatusBar({ light = false }: { light?: boolean }) {
@@ -52,121 +66,131 @@ function StatusBar({ light = false }: { light?: boolean }) {
 
 function CeVaiApp() {
   const [screen, setScreen] = useState<Screen>("welcome");
+  const [previousScreen, setPreviousScreen] = useState<MainScreen>("home");
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [modalOpen, setModalOpen] = useState(false);
-  const [favorite, setFavorite] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>("Todos");
+  const [selectedPlace, setSelectedPlace] = useState<Place>(places[0]);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState("");
+  const toastTimer = useRef<number | undefined>(undefined);
 
   const notify = (message: string) => {
+    window.clearTimeout(toastTimer.current);
     setToast(message);
-    window.setTimeout(() => setToast(""), 1800);
+    toastTimer.current = window.setTimeout(() => setToast(""), 1800);
+  };
+  const go = (next: Screen, backwards = false) => {
+    setDirection(backwards ? "back" : "forward");
+    setScreen(next);
+  };
+  const openDetail = (place: Place, from: MainScreen) => {
+    setSelectedPlace(place);
+    setPreviousScreen(from);
+    go("detail");
+  };
+  const toggleSaved = (place: Place) => {
+    setSavedIds((current) => {
+      const next = new Set(current);
+      if (next.has(place.id)) next.delete(place.id); else next.add(place.id);
+      return next;
+    });
+    notify(savedIds.has(place.id) ? "Removido dos salvos" : "Lugar salvo!");
   };
 
   return (
     <main className="min-h-dvh bg-primary/5 p-0 sm:grid sm:place-items-center sm:p-7">
       <div className="relative h-dvh w-full overflow-hidden bg-background sm:h-[852px] sm:max-h-[calc(100vh-3.5rem)] sm:w-[393px] sm:rounded-[2.6rem] sm:border-[7px] sm:border-foreground sm:shadow-2xl">
-        {screen === "welcome" && <WelcomeScreen onEnter={() => setScreen("home")} />}
-        {screen === "home" && <HomeScreen favorite={favorite} onFavorite={() => setFavorite((v) => !v)} onMap={() => setScreen("map")} onDetail={() => setScreen("detail")} onAdd={() => setModalOpen(true)} />}
-        {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onHome={() => setScreen("home")} onAdd={() => setModalOpen(true)} onDetail={() => setScreen("detail")} />}
-        {screen === "detail" && <DetailScreen saved={saved} onBack={() => setScreen("home")} onSave={() => { setSaved((v) => !v); notify(saved ? "Removido dos salvos" : "Lugar salvo!"); }} onGo={() => notify("Adicionado à sua lista")} />}
+        <div key={screen} className={direction === "back" ? "animate-screen-back" : "animate-screen-in"}>
+          {screen === "welcome" && <WelcomeScreen onEnter={() => go("home")} />}
+          {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
+          {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
+          {screen === "detail" && <DetailScreen place={selectedPlace} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
+          {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} />}
+          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
+        </div>
         {modalOpen && <ExperienceModal onClose={() => setModalOpen(false)} onPublish={() => { setModalOpen(false); notify("Experiência publicada!"); }} />}
-        {toast && <div className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
+        {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
       </div>
     </main>
   );
 }
 
 function WelcomeScreen({ onEnter }: { onEnter: () => void }) {
-  return (
-    <section className="animate-screen-in relative h-full overflow-hidden bg-primary">
-      <StatusBar light />
-      <img src={goianiaHero} width={768} height={1376} className="h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" />
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-primary/85" />
-      <div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-7 text-center text-primary-foreground">
-        <Logo light />
-        <p className="mt-5 font-display text-xl font-extrabold leading-tight">Descubra.<br />Vive.<br />Registra.</p>
-        <div className="mt-10 space-y-3">
-          <Button onClick={onEnter} className="h-12 w-full rounded-full bg-primary text-primary-foreground shadow-lg">Criar conta</Button>
-          <Button onClick={onEnter} className="h-12 w-full rounded-full border border-primary-foreground/40 bg-background/90 text-primary backdrop-blur">Entrar</Button>
-        </div>
-        <p className="mt-6 text-[10px] font-semibold opacity-80">Explorando o que Goiânia tem de melhor ♥</p>
-      </div>
-    </section>
-  );
+  return <section className="relative h-dvh overflow-hidden bg-primary sm:h-[838px]"><StatusBar light /><img src={goianiaHero} width={768} height={1376} className="h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" /><div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-primary/85" /><div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-7 text-center text-primary-foreground"><Logo light /><p className="mt-5 font-display text-xl font-extrabold leading-tight">Descubra.<br />Vive.<br />Registra.</p><div className="mt-10 space-y-3"><Button onClick={onEnter} className="h-12 w-full rounded-full bg-primary text-primary-foreground shadow-lg">Criar conta</Button><Button variant="outline" onClick={onEnter} className="h-12 w-full rounded-full border-primary-foreground/40 bg-background/90 text-primary backdrop-blur">Entrar</Button></div><p className="mt-6 text-[10px] font-semibold opacity-80">Explorando o que Goiânia tem de melhor ♥</p></div></section>;
 }
 
-function HomeScreen({ favorite, onFavorite, onMap, onDetail, onAdd }: { favorite: boolean; onFavorite: () => void; onMap: () => void; onDetail: () => void; onAdd: () => void }) {
-  return (
-    <section className="animate-screen-in h-full overflow-y-auto pb-24 pt-12">
-      <StatusBar />
-      <header className="flex items-center justify-between px-5"><Logo compact /><Bell size={21} className="text-primary" fill="currentColor" /></header>
-      <div className="mx-5 mt-4 flex h-11 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm"><Search size={17} className="text-muted-foreground" /><input aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" /><MoreHorizontal size={17} /></div>
-      <div className="mt-5 flex justify-between px-4">
-        {categories.map(({ name, icon: Icon, tone }) => <Button key={name} onClick={() => undefined} className="flex-col gap-1.5 text-[10px] font-bold text-foreground"><span className={`grid size-12 place-items-center rounded-full ${tone}`}><Icon size={21} /></span>{name}</Button>)}
-      </div>
-      <div className="mt-7 flex items-center justify-between px-5"><h1 className="font-display text-xl font-black">Destaques da semana</h1><Button className="gap-1 text-xs text-primary">Ver todos <ChevronRight size={14} /></Button></div>
-      <article className="mx-5 mt-3 overflow-hidden rounded-2xl bg-card shadow-md">
-        <button aria-label="Abrir Restaurante Baru" onClick={onDetail} className="relative block h-44 w-full overflow-hidden"><img src={restaurantBaru} width={1200} height={704} loading="lazy" alt="Interior do Restaurante Baru" className="h-full w-full object-cover" /><span className="absolute left-3 top-3 rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">Em alta</span></button>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 p-4"><button onClick={onDetail} className="min-w-0 text-left"><h2 className="truncate font-display text-base font-extrabold">Restaurante Baru</h2><p className="mt-1 flex items-center gap-1 text-xs"><Star size={13} className="fill-secondary text-secondary" /> <b>4.8</b> (321) <span className="text-muted-foreground">• Setor Marista</span></p></button><Button aria-label="Favoritar" onClick={onFavorite} className="size-10 rounded-full bg-muted text-secondary"><Heart size={20} fill={favorite ? "currentColor" : "none"} /></Button></div>
-      </article>
-      <div className="mx-5 mt-3 grid grid-cols-2 gap-3">
-        <SmallCard image={cafeBiscoito} title="Café Biscoito" area="Setor Bueno" rating="4.7" />
-        <SmallCard image={parqueFlamboyant} title="Parque Flamboyant" area="Jardim Goiás" rating="4.9" />
-      </div>
-      <BottomNav active="home" onHome={() => undefined} onMap={onMap} onAdd={onAdd} />
-    </section>
-  );
-}
-
-function SmallCard({ image, title, area, rating }: { image: string; title: string; area: string; rating: string }) {
-  return <article className="overflow-hidden rounded-2xl bg-card shadow-sm"><img src={image} loading="lazy" width={816} height={816} alt={title} className="h-28 w-full object-cover" /><div className="p-3"><h3 className="truncate text-sm font-extrabold">{title}</h3><p className="mt-1 flex items-center gap-1 text-[11px]"><Star size={11} className="fill-secondary text-secondary" />{rating}</p><p className="mt-1 text-[10px] text-muted-foreground">{area}</p></div></article>;
-}
-
-function BottomNav({ active, onHome, onMap, onAdd }: { active: "home" | "map"; onHome: () => void; onMap: () => void; onAdd: () => void }) {
-  const item = "flex flex-col items-center gap-1 text-[9px] font-bold";
-  return <nav className="absolute inset-x-0 bottom-0 z-20 grid h-[78px] grid-cols-5 items-center border-t border-border bg-background/95 px-3 pb-2 backdrop-blur"><Button onClick={onHome} className={`${item} ${active === "home" ? "text-primary" : "text-muted-foreground"}`}><MapPin size={20} fill={active === "home" ? "currentColor" : "none"} />Explorar</Button><Button onClick={onMap} className={`${item} ${active === "map" ? "text-primary" : "text-muted-foreground"}`}><Map size={20} />Mapa</Button><Button aria-label="Registrar experiência" onClick={onAdd} className="mx-auto size-14 -translate-y-3 rounded-full bg-primary text-primary-foreground shadow-lg"><Plus size={28} /></Button><Button className={`${item} text-muted-foreground`}><Heart size={20} />Salvos</Button><Button className={`${item} text-muted-foreground`}><CircleUserRound size={20} />Perfil</Button></nav>;
-}
-
-function MapScreen({ active, onCategory, onHome, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onHome: () => void; onAdd: () => void; onDetail: () => void }) {
-  const pins = [
-    { x: "28%", y: "31%", label: "Setor Marista", tone: "bg-secondary", Icon: Utensils },
-    { x: "59%", y: "42%", label: "Setor Bueno", tone: "bg-amber-700", Icon: Coffee },
-    { x: "76%", y: "26%", label: "Flamboyant", tone: "bg-sky-600", Icon: Hotel },
-    { x: "34%", y: "62%", label: "Jardim Goiás", tone: "bg-emerald-600", Icon: Trees },
-    { x: "70%", y: "70%", label: "Parque Areião", tone: "bg-emerald-600", Icon: Trees },
-  ];
-  return <section className="animate-screen-in relative h-full overflow-hidden bg-muted pt-12"><StatusBar />
-    <div className="absolute inset-0 opacity-70" style={{ backgroundImage: "linear-gradient(28deg, transparent 46%, var(--border) 47%, var(--border) 49%, transparent 50%), linear-gradient(112deg, transparent 45%, var(--card) 46%, var(--card) 52%, transparent 53%)", backgroundSize: "92px 78px, 120px 105px" }} />
-    <div className="absolute left-[-20%] top-[47%] h-10 w-[150%] rotate-[-16deg] bg-sky-100/70" />
-    <div className="relative z-10 mx-4 flex h-11 items-center gap-2 rounded-full bg-card px-4 shadow-lg"><Search size={17} /><input aria-label="Buscar nesta área" className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar nesta área" /><Navigation size={17} className="text-primary" /></div>
-    <div className="relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">{(["Todos", "Restaurantes", "Cafés", "Parques", "Hotéis"] as Category[]).map((cat) => <Button key={cat} onClick={() => onCategory(cat)} className={`h-8 shrink-0 rounded-full px-3 text-[11px] ${active === cat ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm"}`}>{cat}</Button>)}</div>
-    {pins.map(({ x, y, label, tone, Icon }) => <Button key={label} onClick={onDetail} style={{ left: x, top: y }} className="absolute z-10 -translate-x-1/2 flex-col text-[10px] text-foreground"><span className={`grid size-10 place-items-center rounded-full border-2 border-background text-primary-foreground shadow-lg ${tone}`}><Icon size={17} /></span><span className="mt-1 rounded bg-background/75 px-1.5 py-0.5 backdrop-blur">{label}</span></Button>)}
-    <div className="absolute bottom-24 left-1/2 z-10 -translate-x-1/2 rounded-full bg-card px-4 py-2 text-sm font-black shadow">Goiânia</div>
-    <Button aria-label="Minha localização" className="absolute bottom-24 right-4 z-10 size-12 rounded-full bg-card text-primary shadow-lg"><Navigation size={20} /></Button>
-    <BottomNav active="map" onHome={onHome} onMap={() => undefined} onAdd={onAdd} />
+function HomeScreen({ activeCategory, savedIds, onCategory, onDetail, onNavigate, onSave, onAdd }: { activeCategory: Category; savedIds: Set<string>; onCategory: (category: Category) => void; onDetail: (place: Place) => void; onNavigate: (screen: MainScreen) => void; onSave: (place: Place) => void; onAdd: () => void }) {
+  const [query, setQuery] = useState("");
+  const visible = useMemo(() => places.filter((place) => (activeCategory === "Todos" || place.category === activeCategory) && place.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [activeCategory, query]);
+  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="flex items-center justify-between px-5"><Logo compact /><Bell size={21} className="text-primary" fill="currentColor" /></header><div className="mx-5 mt-4 flex h-11 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm"><Search size={17} className="text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" /><MoreHorizontal size={17} /></div>
+    <div className="mt-5 flex justify-between px-3">{categoryOptions.map(({ name, icon: Icon, tone }) => <Button variant="ghost" key={name} onClick={() => onCategory(activeCategory === name ? "Todos" : name)} className={`h-auto min-w-0 flex-col gap-1.5 rounded-xl px-1 py-1 text-[10px] font-bold ${activeCategory === name ? "text-primary" : "text-foreground"}`}><span className={`grid size-12 place-items-center rounded-full transition-transform ${tone} ${activeCategory === name ? "scale-110 ring-2 ring-primary ring-offset-2" : ""}`}><Icon size={21} /></span>{name}</Button>)}</div>
+    <div className="mt-7 flex items-center justify-between px-5"><h1 className="font-display text-xl font-black">{activeCategory === "Todos" ? "Destaques da semana" : activeCategory}</h1><Button variant="ghost" onClick={() => onCategory("Todos")} className="h-8 gap-1 px-1 text-xs text-primary">{activeCategory === "Todos" ? "Ver todos" : "Limpar"}<ChevronRight size={14} /></Button></div>
+    <div className="mx-5 mt-3 grid gap-3">{visible.length ? visible.map((place, index) => <PlaceCard key={place.id} place={place} featured={index === 0} saved={savedIds.has(place.id)} onOpen={() => onDetail(place)} onSave={() => onSave(place)} />) : <EmptyState title="Nenhum lugar encontrado" text="Tente outra categoria ou busca." />}</div>
+    <BottomNav active="home" onNavigate={onNavigate} onAdd={onAdd} />
   </section>;
 }
 
-function DetailScreen({ saved, onBack, onSave, onGo }: { saved: boolean; onBack: () => void; onSave: () => void; onGo: () => void }) {
+function PlaceCard({ place, featured, saved, onOpen, onSave }: { place: Place; featured?: boolean; saved: boolean; onOpen: () => void; onSave: () => void }) {
+  return <article className={`overflow-hidden rounded-2xl bg-card shadow-sm ${featured ? "shadow-md" : "grid grid-cols-[104px_1fr]"}`}><Button variant="ghost" aria-label={`Abrir ${place.name}`} onClick={onOpen} className={`relative block h-auto w-full overflow-hidden rounded-none p-0 ${featured ? "h-40" : "h-full min-h-28"}`}><img src={place.image} width={1200} height={704} loading="lazy" alt={place.name} className="h-full w-full object-cover" />{featured && <span className="absolute left-3 top-3 rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">Em alta</span>}</Button><div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-3"><Button variant="ghost" onClick={onOpen} className="h-auto min-w-0 justify-start whitespace-normal p-0 text-left hover:bg-transparent"><span className="min-w-0"><strong className="block truncate font-display text-sm font-extrabold">{place.name}</strong><span className="mt-1 flex items-center gap-1 text-[11px]"><Star size={12} className="fill-secondary text-secondary" /><b>{place.rating}</b><span className="truncate text-muted-foreground">• {place.area}</span></span></span></Button><Button variant="ghost" size="icon" aria-label={saved ? "Remover dos salvos" : "Salvar lugar"} onClick={onSave} className="rounded-full bg-muted text-secondary"><Heart size={19} fill={saved ? "currentColor" : "none"} /></Button></div></article>;
+}
+
+function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
+  const items: Array<{ key: MainScreen; label: string; icon: typeof MapPin }> = [{ key: "home", label: "Explorar", icon: MapPin }, { key: "map", label: "Mapa", icon: Map }, { key: "saved", label: "Salvos", icon: Heart }, { key: "profile", label: "Perfil", icon: CircleUserRound }];
+  return <nav className="absolute inset-x-0 bottom-0 z-20 grid h-[78px] grid-cols-5 items-center border-t border-border bg-background/95 px-3 pb-2 backdrop-blur">{items.slice(0, 2).map(({ key, label, icon: Icon }) => <NavItem key={key} active={active === key} label={label} Icon={Icon} onClick={() => onNavigate(key)} />)}<Button aria-label="Registrar experiência" onClick={onAdd} className="mx-auto size-14 -translate-y-3 rounded-full bg-primary p-0 text-primary-foreground shadow-lg"><Plus className="size-7" /></Button>{items.slice(2).map(({ key, label, icon: Icon }) => <NavItem key={key} active={active === key} label={label} Icon={Icon} onClick={() => onNavigate(key)} />)}</nav>;
+}
+
+function NavItem({ active, label, Icon, onClick }: { active: boolean; label: string; Icon: typeof MapPin; onClick: () => void }) {
+  return <Button variant="ghost" onClick={onClick} aria-current={active ? "page" : undefined} className={`h-auto flex-col gap-1 rounded-xl px-1 py-1 text-[9px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}><Icon size={20} fill={active && (label === "Explorar" || label === "Salvos") ? "currentColor" : "none"} />{label}</Button>;
+}
+
+function MapScreen({ active, onCategory, onNavigate, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
+  const visible = places.filter((place) => active === "Todos" || place.category === active);
+  return <section className="relative h-dvh overflow-hidden bg-muted pt-12 sm:h-[838px]"><StatusBar /><div className="map-pattern absolute inset-0 opacity-70" /><div className="absolute left-[-20%] top-[47%] h-10 w-[150%] rotate-[-16deg] bg-sky-100/70" /><div className="relative z-10 mx-4 flex h-11 items-center gap-2 rounded-full bg-card px-4 shadow-lg"><Search size={17} /><input aria-label="Buscar nesta área" className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar nesta área" /><Navigation size={17} className="text-primary" /></div><div className="relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">{(["Todos", ...categoryOptions.map((item) => item.name)] as Category[]).map((cat) => <Button key={cat} onClick={() => onCategory(cat)} className={`h-8 shrink-0 rounded-full px-3 text-[11px] ${active === cat ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm hover:bg-card"}`}>{cat}</Button>)}</div>
+    {visible.map((place) => { const category = categoryOptions.find((item) => item.name === place.category); const Icon = category?.icon ?? MapPin; return <Button key={place.id} aria-label={`Abrir ${place.name}`} onClick={() => onDetail(place)} style={{ left: place.x, top: place.y }} className="absolute z-10 h-auto -translate-x-1/2 flex-col gap-0 bg-transparent p-0 text-[10px] text-foreground shadow-none hover:bg-transparent"><span className={`grid size-10 place-items-center rounded-full border-2 border-background text-primary-foreground shadow-lg ${category?.tone ?? "bg-primary"}`}><Icon size={17} /></span><span className="mt-1 max-w-24 rounded bg-background/85 px-1.5 py-0.5 leading-tight backdrop-blur">{place.area}</span></Button>; })}
+    {visible.length > 0 && <Button variant="ghost" onClick={() => onDetail(visible[0])} className="absolute bottom-24 left-4 right-20 z-10 h-auto justify-start gap-3 rounded-2xl bg-card p-2 text-left shadow-lg hover:bg-card"><img src={visible[0].image} alt="" className="size-14 rounded-xl object-cover" /><span className="min-w-0"><b className="block truncate text-xs">{visible[0].name}</b><small className="text-muted-foreground">★ {visible[0].rating} · {visible[0].area}</small></span></Button>}<Button aria-label="Minha localização" className="absolute bottom-24 right-4 z-10 size-12 rounded-full bg-card p-0 text-primary shadow-lg hover:bg-card"><Navigation size={20} /></Button><BottomNav active="map" onNavigate={onNavigate} onAdd={onAdd} />
+  </section>;
+}
+
+function DetailScreen({ place, saved, onBack, onSave, onGo, onShare }: { place: Place; saved: boolean; onBack: () => void; onSave: () => void; onGo: () => void; onShare: () => void }) {
   const [tab, setTab] = useState("Sobre");
-  return <section className="animate-screen-in h-full overflow-y-auto pb-24 bg-background"><StatusBar light />
-    <div className="relative h-64"><img src={restaurantBaru} width={1200} height={704} alt="Restaurante Baru" className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-b from-foreground/30 to-transparent" /><div className="absolute left-4 right-4 top-12 flex justify-between"><Button aria-label="Voltar" onClick={onBack} className="size-10 rounded-full bg-background/90 text-foreground"><ArrowLeft size={20} /></Button><div className="flex gap-2"><Button aria-label="Compartilhar" className="size-10 rounded-full bg-background/90 text-foreground"><Share2 size={18} /></Button><Button aria-label="Mais opções" className="size-10 rounded-full bg-background/90 text-foreground"><MoreHorizontal size={20} /></Button></div></div></div>
-    <div className="px-5 pt-5"><div className="flex items-start justify-between gap-3"><div><h1 className="font-display text-2xl font-black">Restaurante Baru</h1><p className="mt-1 flex items-center gap-1 text-sm"><Star size={15} className="fill-secondary text-secondary" /><b>4.8</b> (321 avaliações)</p></div><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-primary">Ver no mapa</span></div><p className="mt-2 text-xs text-muted-foreground">$$ · Restaurante · Setor Marista</p></div>
-    <div className="mt-5 flex border-b border-border px-4">{["Sobre", "Avaliações", "Fotos", "Dicas"].map((name) => <Button key={name} onClick={() => setTab(name)} className={`h-11 flex-1 border-b-2 text-xs ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div>
-    <div className="animate-screen-in px-5 py-5" key={tab}>{tab === "Sobre" && <><div className="grid grid-cols-3 gap-2"><img src={cafeBiscoito} loading="lazy" alt="Prato do Baru" className="aspect-square w-full rounded-xl object-cover" /><img src={parqueFlamboyant} loading="lazy" alt="Área externa" className="aspect-square w-full rounded-xl object-cover" /><img src={restaurantBaru} loading="lazy" alt="Ambiente do restaurante" className="aspect-square w-full rounded-xl object-cover" /></div><p className="mt-4 text-sm leading-relaxed">Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.</p><h2 className="mt-6 font-display text-base font-black">Avaliações recentes</h2><div className="mt-3 flex gap-3"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Comida incrível e ambiente muito agradável!</p></div></div></>}{tab !== "Sobre" && <div className="py-14 text-center text-sm text-muted-foreground">Conteúdo de {tab.toLowerCase()} em breve.</div>}</div>
-    <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.35fr] gap-3 border-t border-border bg-background px-4 py-3"><Button onClick={onSave} className="gap-2 rounded-full border border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none"} />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Send size={17} />Quero ir</Button></div>
+  return <section className="h-dvh overflow-y-auto bg-background pb-24 sm:h-[838px]"><StatusBar light /><div className="relative h-64"><img src={place.image} width={1200} height={704} alt={place.name} className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-b from-foreground/30 to-transparent" /><div className="absolute left-4 right-4 top-12 flex justify-between"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full bg-background/90 text-foreground hover:bg-background"><ArrowLeft size={20} /></Button><div className="flex gap-2"><Button variant="ghost" size="icon" aria-label="Compartilhar" onClick={onShare} className="rounded-full bg-background/90 text-foreground hover:bg-background"><Share2 size={18} /></Button><Button variant="ghost" size="icon" aria-label="Mais opções" className="rounded-full bg-background/90 text-foreground hover:bg-background"><MoreHorizontal size={20} /></Button></div></div></div>
+    <div className="px-5 pt-5"><div className="flex items-start justify-between gap-3"><div><h1 className="font-display text-2xl font-black">{place.name}</h1><p className="mt-1 flex items-center gap-1 text-sm"><Star size={15} className="fill-secondary text-secondary" /><b>{place.rating}</b> ({place.reviews} avaliações)</p></div><Button variant="ghost" onClick={onGo} className="h-auto rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-primary hover:bg-emerald-50">Ver no mapa</Button></div><p className="mt-2 text-xs text-muted-foreground">{place.price} · {place.category.replace(/s$/, "")} · {place.area}</p></div>
+    <div className="mt-5 flex border-b border-border px-4">{["Sobre", "Avaliações", "Fotos", "Dicas"].map((name) => <Button variant="ghost" key={name} onClick={() => setTab(name)} className={`h-11 flex-1 rounded-none border-b-2 px-1 text-xs hover:bg-transparent ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div><DetailTab key={tab} tab={tab} place={place} />
+    <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.35fr] gap-3 border-t border-border bg-background px-4 py-3"><Button variant="outline" onClick={onSave} className="gap-2 rounded-full border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none"} />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Send size={17} />Quero ir</Button></div>
   </section>;
 }
+
+function DetailTab({ tab, place }: { tab: string; place: Place }) {
+  return <div className="animate-tab-in px-5 py-5">{tab === "Sobre" && <><p className="text-sm leading-relaxed">{place.description}</p><div className="mt-5 rounded-2xl bg-card p-4 shadow-sm"><b className="text-sm">Informações</b><p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={15} />{place.area}, Goiânia</p></div></>}{tab === "Avaliações" && <><h2 className="font-display text-base font-black">O que estão dizendo</h2><div className="mt-3 flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Experiência incrível e ambiente muito agradável!</p></div></div></>}{tab === "Fotos" && <div className="grid grid-cols-2 gap-2"><img src={place.image} alt={place.name} className="col-span-2 aspect-[2/1] w-full rounded-xl object-cover" /><img src={cafeBiscoito} alt="Detalhe do local" className="aspect-square w-full rounded-xl object-cover" /><img src={parqueFlamboyant} alt="Ambiente do local" className="aspect-square w-full rounded-xl object-cover" /></div>}{tab === "Dicas" && <div className="space-y-3"><Tip initials="JS" text="Chegue um pouco antes do pôr do sol." /><Tip initials="AC" text="Durante a semana é mais tranquilo." /></div>}</div>;
+}
+
+function Tip({ initials, text }: { initials: string; text: string }) { return <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">{initials}</span><p className="pt-1 text-sm">{text}</p></div>; }
+
+function SavedScreen({ savedPlaces, onNavigate, onAdd, onDetail }: { savedPlaces: Place[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
+  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /><h1 className="mt-6 font-display text-2xl font-black">Seus lugares salvos</h1><p className="mt-1 text-sm text-muted-foreground">Volte quando quiser aos seus favoritos.</p></header><div className="mx-5 mt-5 grid gap-3">{savedPlaces.length ? savedPlaces.map((place) => <PlaceCard key={place.id} place={place} saved onOpen={() => onDetail(place)} onSave={() => undefined} />) : <EmptyState title="Nada salvo ainda" text="Toque no coração de um lugar para encontrá-lo aqui." />}</div><BottomNav active="saved" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+}
+
+function ProfileScreen({ savedCount, onNavigate, onAdd }: { savedCount: number; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
+  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /></header><div className="mt-8 flex flex-col items-center px-5 text-center"><div className="grid size-24 place-items-center rounded-full bg-primary text-3xl font-black text-primary-foreground">R</div><h1 className="mt-4 font-display text-2xl font-black">Ricardo</h1><p className="text-sm text-muted-foreground">Explorador de Goiânia</p><div className="mt-7 grid w-full grid-cols-3 divide-x divide-border rounded-2xl bg-card p-4 shadow-sm"><ProfileStat value="12" label="Registros" /><ProfileStat value={String(savedCount)} label="Salvos" /><ProfileStat value="8" label="Dicas" /></div><Button variant="outline" className="mt-5 w-full rounded-full border-primary text-primary">Editar perfil</Button></div><BottomNav active="profile" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+}
+
+function ProfileStat({ value, label }: { value: string; label: string }) { return <div><b className="block font-display text-xl text-primary">{value}</b><small className="text-muted-foreground">{label}</small></div>; }
+function EmptyState({ title, text }: { title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center"><Heart className="mx-auto text-muted-foreground" /><b className="mt-3 block text-sm">{title}</b><p className="mt-1 text-xs text-muted-foreground">{text}</p></div>; }
 
 function ExperienceModal({ onClose, onPublish }: { onClose: () => void; onPublish: () => void }) {
-  const [category, setCategory] = useState<Category>("Restaurantes");
-  const [recommend, setRecommend] = useState(true);
+  const [category, setCategory] = useState<Exclude<Category, "Todos">>("Restaurantes");
+  const [wouldReturn, setWouldReturn] = useState(true);
   const [review, setReview] = useState("");
-  return <div className="absolute inset-0 z-40 flex items-end bg-foreground/35 sm:items-center"><section role="dialog" aria-modal="true" aria-label="Registrar experiência" className="animate-modal-in flex h-[94%] w-full flex-col overflow-hidden rounded-t-[2rem] bg-background sm:h-full sm:rounded-none"><header className="grid h-16 shrink-0 grid-cols-[40px_1fr_40px] items-center border-b border-border px-4"><Button aria-label="Fechar" onClick={onClose} className="size-10 rounded-full"><X size={22} /></Button><h1 className="text-center font-display text-base font-black">Registrar experiência</h1></header><div className="flex-1 overflow-y-auto px-5 py-4">
-    <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none]">{categories.slice(0,4).map(({ name, icon: Icon, tone }) => <Button key={name} onClick={() => setCategory(name)} className={`flex-col gap-1 rounded-2xl px-3 py-2 text-[9px] ${category === name ? "ring-2 ring-secondary" : ""}`}><span className={`grid size-10 place-items-center rounded-full ${tone}`}><Icon size={18} /></span>{name === "Restaurantes" ? "Restaurante" : name}</Button>)}</div>
-    <label className="mt-3 grid h-28 place-items-center rounded-2xl border border-dashed border-border bg-card text-center"><input type="file" accept="image/*" multiple className="sr-only" /><span><span className="mx-auto grid size-9 place-items-center rounded-full bg-background shadow"><Camera size={18} /></span><b className="mt-2 block text-xs">Adicionar fotos</b><small className="text-muted-foreground">Até 10 fotos</small></span></label>
-    <div className="mt-4 space-y-3"><input aria-label="Nome do lugar" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Qual é o nome do lugar?" /><div className="relative"><input aria-label="Localização" className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Onde fica?" /><MapPin className="absolute right-4 top-4 text-muted-foreground" size={17} /></div><div className="relative"><textarea aria-label="Sua experiência" value={review} onChange={(event) => setReview(event.target.value.slice(0,500))} className="h-32 w-full resize-none rounded-xl border border-input bg-card p-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Conte sua experiência..." /><span className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">{review.length}/500</span></div></div>
-    <div className="mt-5 flex items-center justify-between border-b border-border pb-5"><b className="text-sm">Como foi?</b><div className="flex gap-1 text-muted-foreground">{[1,2,3,4,5].map((n) => <Star key={n} size={21} />)}</div></div><div className="flex items-center justify-between py-5"><div><b className="text-sm">Recomendo?</b><p className="text-[11px] text-muted-foreground">Voltaria a este lugar?</p></div><Button role="switch" aria-checked={recommend} aria-label="Recomendo" onClick={() => setRecommend((v) => !v)} className={`h-7 w-12 justify-start rounded-full p-1 ${recommend ? "bg-primary" : "bg-muted"}`}><span className={`size-5 rounded-full bg-background shadow transition-transform ${recommend ? "translate-x-5" : "translate-x-0"}`} /></Button></div>
-  </div><div className="shrink-0 border-t border-border p-4"><Button onClick={onPublish} className="h-12 w-full rounded-full bg-primary text-primary-foreground">Publicar</Button></div></section></div>;
+  const [placeName, setPlaceName] = useState("");
+  const [location, setLocation] = useState("");
+  const [rating, setRating] = useState(0);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : null); reader.readAsDataURL(file); };
+  return <div className="absolute inset-0 z-40 flex items-end bg-foreground/35 sm:items-center"><section role="dialog" aria-modal="true" aria-label="Registrar experiência" className="animate-modal-in flex h-[94%] w-full flex-col overflow-hidden rounded-t-[2rem] bg-background sm:h-full sm:rounded-none"><header className="grid h-16 shrink-0 grid-cols-[40px_1fr_40px] items-center border-b border-border px-4"><Button variant="ghost" size="icon" aria-label="Fechar" onClick={onClose} className="rounded-full"><X size={22} /></Button><h1 className="text-center font-display text-base font-black">Registrar experiência</h1></header><div className="flex-1 overflow-y-auto px-5 py-4">
+    <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none]">{categoryOptions.map(({ name, icon: Icon, tone }) => <Button variant="ghost" key={name} onClick={() => setCategory(name)} className={`h-auto flex-col gap-1 rounded-2xl px-3 py-2 text-[9px] ${category === name ? "ring-2 ring-secondary" : ""}`}><span className={`grid size-10 place-items-center rounded-full ${tone}`}><Icon size={18} /></span>{name}</Button>)}</div>
+    <label className="relative mt-3 grid h-28 cursor-pointer place-items-center overflow-hidden rounded-2xl border border-dashed border-border bg-card text-center"><input onChange={handlePhoto} type="file" accept="image/*" className="sr-only" />{photo ? <><img src={photo} alt="Prévia da foto selecionada" className="h-full w-full object-cover" /><span className="absolute rounded-full bg-background/90 px-3 py-1 text-[10px] font-bold">Trocar foto</span></> : <span><span className="mx-auto grid size-9 place-items-center rounded-full bg-background shadow"><Camera size={18} /></span><b className="mt-2 block text-xs">Adicionar foto</b><small className="text-muted-foreground">Escolha uma imagem</small></span>}</label>
+    <div className="mt-4 space-y-3"><input value={placeName} onChange={(event) => setPlaceName(event.target.value)} aria-label="Nome do lugar" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Qual é o nome do lugar?" /><div className="relative"><input value={location} onChange={(event) => setLocation(event.target.value)} aria-label="Localização" className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Onde fica?" /><MapPin className="absolute right-4 top-4 text-muted-foreground" size={17} /></div><div className="relative"><textarea aria-label="Sua experiência" value={review} onChange={(event) => setReview(event.target.value.slice(0, 500))} className="h-28 w-full resize-none rounded-xl border border-input bg-card p-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Conte sua experiência..." /><span className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">{review.length}/500</span></div></div>
+    <div className="mt-5 flex items-center justify-between border-b border-border pb-5"><b className="text-sm">Como foi?</b><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <Button variant="ghost" size="icon" aria-label={`${n} estrelas`} key={n} onClick={() => setRating(n)} className={`size-7 p-0 ${n <= rating ? "text-secondary" : "text-muted-foreground"}`}><Star size={21} fill={n <= rating ? "currentColor" : "none"} /></Button>)}</div></div><div className="flex items-center justify-between py-5"><div><b className="text-sm">Voltaria?</b><p className="text-[11px] text-muted-foreground">Você voltaria a este lugar?</p></div><Button role="switch" aria-checked={wouldReturn} aria-label="Voltaria" onClick={() => setWouldReturn((value) => !value)} className={`h-7 w-12 justify-start rounded-full p-1 ${wouldReturn ? "bg-primary" : "bg-muted"}`}><span className={`size-5 rounded-full bg-background shadow transition-transform ${wouldReturn ? "translate-x-5" : "translate-x-0"}`} /></Button></div>
+  </div><div className="shrink-0 border-t border-border p-4"><Button disabled={!placeName.trim() || !location.trim()} onClick={onPublish} className="h-12 w-full rounded-full bg-primary text-primary-foreground">Publicar</Button></div></section></div>;
 }
