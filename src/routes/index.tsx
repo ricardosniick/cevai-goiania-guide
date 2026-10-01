@@ -196,6 +196,38 @@ function WelcomeScreen({ onAuth, onExplore }: { onAuth: () => void; onExplore: (
   return <section className="relative h-dvh min-h-0 overflow-y-auto bg-primary sm:h-[838px]"><StatusBar light /><div className="relative flex min-h-full flex-col justify-end"><img src={goianiaHero} width={768} height={1376} className="absolute inset-0 h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" /><div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/20 to-primary/90" /><div className="relative z-10 flex min-h-[610px] flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-16 text-center text-primary-foreground"><Logo light /><p className="mx-auto mt-4 max-w-xs font-display text-lg font-extrabold leading-snug">O mapa das suas escolhas.</p><p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-primary-foreground/85">Onde você foi e se vale a pena voltar.</p><div className="mt-7 space-y-3"><Button onClick={onAuth} className="h-12 w-full rounded-full bg-primary text-primary-foreground shadow-lg">Criar conta</Button><Button variant="outline" onClick={onAuth} className="h-12 w-full rounded-full border-primary-foreground/50 bg-background/90 text-primary backdrop-blur">Entrar</Button><Button variant="ghost" onClick={onExplore} className="h-9 text-xs text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Explorar sem entrar</Button></div></div></div></section>;
 }
 
+function AuthScreen({ onBack, onSuccess, notify }: { onBack: () => void; onSuccess: (user: User, name: string) => void; notify: (message: string) => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const submit = async () => {
+    setLoading(true);
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, data: { full_name: fullName } } });
+      setLoading(false);
+      if (error) return notify(error.message);
+      if (!data.session) return notify("Confira seu e-mail para confirmar a conta.");
+      if (data.user) onSuccess(data.user, fullName);
+      return;
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) return notify("E-mail ou senha inválidos.");
+    onSuccess(data.user, data.user.user_metadata?.full_name ?? "");
+  };
+  const googleSignIn = async () => {
+    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    if (result.error) notify("Não foi possível entrar com Google.");
+    if (result.redirected) return;
+    const { data } = await supabase.auth.getUser();
+    if (data.user) onSuccess(data.user, data.user.user_metadata?.full_name ?? "");
+  };
+  return <section className="h-dvh overflow-y-auto bg-background px-5 pb-8 pt-12 sm:h-[838px]"><StatusBar /><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full"><ArrowLeft /></Button><div className="mx-auto mt-4 max-w-sm"><Logo compact /><h1 className="mt-8 font-display text-3xl font-black">{mode === "login" ? "Bem-vindo de volta" : "Crie seu mapa"}</h1><p className="mt-2 text-sm text-muted-foreground">{mode === "login" ? "Entre para continuar suas descobertas." : "Guarde lugares, fotos e experiências em um só lugar."}</p><div className="mt-7 grid grid-cols-2 rounded-full bg-muted p-1"><Button onClick={() => setMode("login")} className={`rounded-full ${mode === "login" ? "bg-card text-primary shadow-sm hover:bg-card" : "bg-transparent text-muted-foreground shadow-none hover:bg-transparent"}`}>Entrar</Button><Button onClick={() => setMode("signup")} className={`rounded-full ${mode === "signup" ? "bg-card text-primary shadow-sm hover:bg-card" : "bg-transparent text-muted-foreground shadow-none hover:bg-transparent"}`}>Criar conta</Button></div><div className="mt-6 space-y-3">{mode === "signup" && <input value={fullName} onChange={(event) => setFullName(event.target.value)} aria-label="Nome completo" autoComplete="name" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Nome completo" />}<input value={email} onChange={(event) => setEmail(event.target.value)} aria-label="E-mail" autoComplete="email" type="email" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="E-mail" /><div className="relative"><input value={password} onChange={(event) => setPassword(event.target.value)} aria-label="Senha" autoComplete={mode === "login" ? "current-password" : "new-password"} type={showPassword ? "text" : "password"} className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-12 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Senha" /><Button variant="ghost" size="icon" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword((value) => !value)} className="absolute right-1 top-1 rounded-full text-muted-foreground">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div><Button disabled={loading || !email || password.length < 6 || (mode === "signup" && !fullName.trim())} onClick={() => void submit()} className="h-12 w-full rounded-full bg-primary text-primary-foreground">{loading ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}</Button></div><div className="my-5 flex items-center gap-3 text-[10px] text-muted-foreground"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div><Button variant="outline" onClick={() => void googleSignIn()} className="h-12 w-full rounded-full border-border bg-card text-foreground"><span className="mr-2 text-base font-black text-secondary">G</span>Entrar com Google</Button></div></section>;
+}
+
 function HomeScreen({ activeCategory, savedIds, onCategory, onDetail, onNavigate, onSave, onAdd }: { activeCategory: Category; savedIds: Set<string>; onCategory: (category: Category) => void; onDetail: (place: Place) => void; onNavigate: (screen: MainScreen) => void; onSave: (place: Place) => void; onAdd: () => void }) {
   const [query, setQuery] = useState("");
   const visible = useMemo(() => places.filter((place) => (activeCategory === "Todos" || place.category === activeCategory) && place.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [activeCategory, query]);
