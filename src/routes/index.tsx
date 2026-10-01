@@ -269,7 +269,7 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 }
 
 function NavItem({ active, label, Icon, onClick }: { active: boolean; label: string; Icon: typeof MapPin; onClick: () => void }) {
-  return <Button variant="ghost" onClick={onClick} aria-current={active ? "page" : undefined} className={`h-auto flex-col gap-1 rounded-xl px-1 py-1 text-[9px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}><Icon size={20} fill={active && (label === "Explorar" || label === "Salvos") ? "currentColor" : "none"} />{label}</Button>;
+  return <Button variant="ghost" onClick={onClick} aria-current={active ? "page" : undefined} className={`h-auto flex-col gap-1 rounded-xl px-1 py-1 text-[9px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}><Icon size={20} fill={active && label === "Salvos" ? "currentColor" : "none"} />{label}</Button>;
 }
 
 function MapScreen({ active, onCategory, onNavigate, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
