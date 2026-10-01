@@ -4,12 +4,15 @@ import {
   Coffee, Heart, Hotel, Map, MapPin, MoreHorizontal, Navigation, Plus,
   Search, Send, Share2, ShoppingBag, Star, Trees, Utensils, X,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import goianiaHero from "@/assets/goiania-hero.jpg";
 import restaurantBaru from "@/assets/restaurant-baru.jpg";
 import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
 import parqueFlamboyant from "@/assets/parque-flamboyant.jpg";
+import googleRestaurant from "@/assets/google-place-restaurant.jpg";
+import googlePark from "@/assets/google-place-park.jpg";
+import googleHotel from "@/assets/google-place-hotel.jpg";
 
 type Screen = "welcome" | "home" | "map" | "detail" | "saved" | "profile";
 type MainScreen = "home" | "map" | "saved" | "profile";
@@ -22,11 +25,26 @@ type Place = {
   rating: string;
   reviews: number;
   image: string;
+  officialPhotos: string[];
+  googlePlaceId: string;
   description: string;
   price: string;
   x: string;
   y: string;
 };
+type DiaryEntry = {
+  id: string;
+  placeId: string;
+  placeName: string;
+  location: string;
+  category: Exclude<Category, "Todos">;
+  review: string;
+  rating: number;
+  wouldReturn: boolean;
+  photo: string | null;
+  createdAt: string;
+};
+type ExperienceDraft = Omit<DiaryEntry, "id" | "createdAt" | "placeId">;
 
 const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Utensils; tone: string }> = [
   { name: "Restaurantes", icon: Utensils, tone: "bg-secondary text-secondary-foreground" },
@@ -37,11 +55,11 @@ const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Ut
 ];
 
 const places: Place[] = [
-  { id: "baru", name: "Restaurante Baru", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: restaurantBaru, description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
-  { id: "biscoito", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
-  { id: "flamboyant", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: parqueFlamboyant, description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
-  { id: "hotel", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: goianiaHero, description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
-  { id: "cerrado", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
+  { id: "baru", googlePlaceId: "ChIJ-simulado-baru-goiania", name: "Restaurante Baru", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: googleRestaurant, officialPhotos: [googleRestaurant, restaurantBaru, cafeBiscoito], description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
+  { id: "biscoito", googlePlaceId: "ChIJ-simulado-cafe-goiania", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, officialPhotos: [cafeBiscoito, googleRestaurant], description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
+  { id: "flamboyant", googlePlaceId: "ChIJ-simulado-parque-goiania", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: googlePark, officialPhotos: [googlePark, parqueFlamboyant, goianiaHero], description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
+  { id: "hotel", googlePlaceId: "ChIJ-simulado-hotel-goiania", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: googleHotel, officialPhotos: [googleHotel, goianiaHero], description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
+  { id: "cerrado", googlePlaceId: "ChIJ-simulado-loja-goiania", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, officialPhotos: [restaurantBaru, googleRestaurant], description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
 ];
 
 const initialPlace: Place = places[0] ?? {
@@ -52,6 +70,8 @@ const initialPlace: Place = places[0] ?? {
   rating: "4.8",
   reviews: 321,
   image: restaurantBaru,
+  officialPhotos: [restaurantBaru],
+  googlePlaceId: "ChIJ-simulado-baru-goiania",
   description: "Cozinha brasileira contemporânea no coração do Marista.",
   price: "$$",
   x: "28%",
