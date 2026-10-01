@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
+import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import goianiaHero from "@/assets/goiania-hero.jpg";
 import restaurantBaru from "@/assets/restaurant-baru.jpg";
 import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
@@ -198,19 +199,21 @@ function CeVaiApp() {
 
 function WelcomeScreen({ onSignup, onLogin, onExplore }: { onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   return <section className="relative h-dvh min-h-0 overflow-hidden bg-primary sm:h-full">
-    <img src={goianiaHero} width={768} height={1376} className="absolute inset-0 h-full w-full object-cover" alt="Vista aérea de Goiânia ao pôr do sol" />
-    <div className="absolute inset-0 bg-gradient-to-b from-primary/30 via-primary/10 to-primary/95" />
-    <StatusBar light />
-    <div className="relative z-10 flex h-full flex-col items-center justify-between px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-24 text-center">
+    <img src={flamboyantReal.url} width={1080} height={1920} className="absolute inset-0 h-full w-full object-cover object-[center_40%]" alt="Parque Flamboyant e o skyline do Jardim Goiás, em Goiânia" />
+    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-background/90 via-background/55 to-transparent" />
+    <div className="absolute inset-x-0 bottom-0 h-[50%] bg-gradient-to-t from-primary via-primary/70 to-transparent" />
+    <StatusBar />
+    <div className="relative z-10 flex h-full flex-col items-center justify-between px-[7.5%] pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(4.5rem,calc(env(safe-area-inset-top)+3rem))] text-center">
       <div className="flex flex-col items-center">
-        <div className="font-display text-6xl font-black text-secondary drop-shadow-lg">Cê Vai<span className="inline-block rotate-6">?</span></div>
-        <p className="mt-4 max-w-[17rem] font-display text-lg font-extrabold leading-snug text-primary-foreground drop-shadow">O mapa das suas escolhas.</p>
-        <p className="mt-1 max-w-[17rem] text-sm leading-relaxed text-primary-foreground/90 drop-shadow">Onde você foi e se vale a pena voltar.</p>
+        <div className="font-display text-[clamp(3rem,15vw,4rem)] font-black leading-none"><span className="text-primary">Cê</span> <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span></div>
+        <p className="mt-4 max-w-[17rem] font-display text-lg font-extrabold leading-snug text-primary">O mapa das suas escolhas.</p>
+        <p className="mt-1 max-w-[17rem] text-sm font-semibold leading-relaxed text-foreground/80">Onde você foi e se vale a pena voltar.</p>
       </div>
-      <div className="w-full max-w-xs space-y-3">
-        <Button onClick={onSignup} className="h-12 w-full rounded-full bg-primary text-base text-primary-foreground shadow-lg">Criar conta</Button>
-        <Button onClick={onLogin} className="h-12 w-full rounded-full bg-background text-base text-primary shadow-lg hover:bg-background/90">Entrar</Button>
-        <button onClick={onExplore} className="pt-1 text-xs font-bold text-primary-foreground/80 underline-offset-4 hover:underline">Explorar sem entrar</button>
+      <div className="w-full space-y-3">
+        <Button onClick={onSignup} className="h-[52px] w-full rounded-full bg-primary text-base font-bold text-primary-foreground shadow-xl ring-1 ring-primary-foreground/15">Criar conta</Button>
+        <Button onClick={onLogin} className="h-[52px] w-full rounded-full bg-card text-base font-bold text-primary shadow-xl hover:bg-card/90">Entrar</Button>
+        <button onClick={onExplore} className="block w-full pt-1 text-sm font-bold text-primary-foreground/85 underline-offset-4 hover:underline">Explorar sem entrar</button>
+        <p className="text-[9px] text-primary-foreground/50">Foto: Fronteira / Wikimedia Commons, CC BY-SA 4.0</p>
       </div>
     </div>
   </section>;
