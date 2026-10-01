@@ -106,8 +106,18 @@ function CeVaiApp() {
   const [activeCategory, setActiveCategory] = useState<Category>("Todos");
   const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("ce-vai-diary");
+      if (stored) setDiaryEntries(JSON.parse(stored) as DiaryEntry[]);
+    } catch {
+      window.localStorage.removeItem("ce-vai-diary");
+    }
+  }, []);
 
   const notify = (message: string) => {
     window.clearTimeout(toastTimer.current);
@@ -131,6 +141,15 @@ function CeVaiApp() {
     });
     notify(savedIds.has(place.id) ? "Removido dos salvos" : "Lugar salvo!");
   };
+  const publishExperience = (draft: ExperienceDraft) => {
+    const matchedPlace = places.find((place) => place.name.toLocaleLowerCase() === draft.placeName.trim().toLocaleLowerCase()) ?? selectedPlace;
+    const entry: DiaryEntry = { ...draft, id: `${Date.now()}`, placeId: matchedPlace.id, createdAt: new Date().toISOString() };
+    const nextEntries = [entry, ...diaryEntries];
+    setDiaryEntries(nextEntries);
+    window.localStorage.setItem("ce-vai-diary", JSON.stringify(nextEntries));
+    setModalOpen(false);
+    notify("Experiência salva no seu diário!");
+  };
 
   return (
     <main className="min-h-dvh bg-primary/5 p-0 sm:grid sm:place-items-center sm:p-7">
@@ -139,11 +158,11 @@ function CeVaiApp() {
           {screen === "welcome" && <WelcomeScreen onEnter={() => go("home")} />}
           {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
           {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
-          {screen === "detail" && <DetailScreen place={selectedPlace} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
+          {screen === "detail" && <DetailScreen place={selectedPlace} communityEntries={diaryEntries.filter((entry) => entry.placeId === selectedPlace.id)} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
           {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} onSave={toggleSaved} />}
-          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
+          {screen === "profile" && <ProfileScreen savedCount={savedIds.size} diaryEntries={diaryEntries} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} />}
         </div>
-        {modalOpen && <ExperienceModal onClose={() => setModalOpen(false)} onPublish={() => { setModalOpen(false); notify("Experiência publicada!"); }} />}
+        {modalOpen && <ExperienceModal initialPlace={selectedPlace} onClose={() => setModalOpen(false)} onPublish={publishExperience} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
       </div>
     </main>
