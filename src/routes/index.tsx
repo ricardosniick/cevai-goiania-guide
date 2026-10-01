@@ -94,6 +94,12 @@ export const Route = createFileRoute("/")({
   component: CeVaiApp,
 });
 
+const testScreens: Array<{ screen: Screen; label: string }> = [
+  { screen: "welcome", label: "Splash" }, { screen: "auth", label: "Login" },
+  { screen: "home", label: "Home" }, { screen: "map", label: "Mapa" },
+  { screen: "detail", label: "Detalhes" },
+];
+
 function Logo({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
   return <div className={`font-display font-black tracking-normal ${compact ? "text-3xl" : "text-6xl"} ${light ? "text-primary-foreground" : "text-primary"}`}>Cê <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span></div>;
 }
@@ -187,6 +193,7 @@ function CeVaiApp() {
         </div>
         {modalOpen && <ExperienceModal initialPlace={selectedPlace} onClose={() => setModalOpen(false)} onPublish={publishExperience} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
+        <div aria-label="Seletor de telas para testes" className="absolute left-1/2 top-2 z-[60] hidden -translate-x-1/2 gap-1 rounded-full bg-background/90 p-1 shadow-lg backdrop-blur sm:flex">{testScreens.map((item) => <Button key={item.screen} variant="ghost" onClick={() => go(item.screen)} className={`h-6 rounded-full px-2 text-[8px] ${screen === item.screen ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground" : "text-muted-foreground"}`}>{item.label}</Button>)}</div>
       </div>
     </main>
   );
