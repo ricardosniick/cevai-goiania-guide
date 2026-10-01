@@ -44,6 +44,20 @@ const places: Place[] = [
   { id: "cerrado", name: "Loja do Cerrado", category: "Lojas", area: "Flamboyant", rating: "4.5", reviews: 96, image: restaurantBaru, description: "Design local, presentes autorais e produtos que celebram a cultura goiana.", price: "$$", x: "70%", y: "67%" },
 ];
 
+const initialPlace: Place = places[0] ?? {
+  id: "baru",
+  name: "Restaurante Baru",
+  category: "Restaurantes",
+  area: "Setor Marista",
+  rating: "4.8",
+  reviews: 321,
+  image: restaurantBaru,
+  description: "Cozinha brasileira contemporânea no coração do Marista.",
+  price: "$$",
+  x: "28%",
+  y: "31%",
+};
+
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "Cê Vai? — Descubra Goiânia" },
@@ -70,7 +84,7 @@ function CeVaiApp() {
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [modalOpen, setModalOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<Category>("Todos");
-  const [selectedPlace, setSelectedPlace] = useState<Place>(places[0]);
+  const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
@@ -146,9 +160,10 @@ function NavItem({ active, label, Icon, onClick }: { active: boolean; label: str
 
 function MapScreen({ active, onCategory, onNavigate, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
   const visible = places.filter((place) => active === "Todos" || place.category === active);
+  const firstVisible = visible[0];
   return <section className="relative h-dvh overflow-hidden bg-muted pt-12 sm:h-[838px]"><StatusBar /><div className="map-pattern absolute inset-0 opacity-70" /><div className="absolute left-[-20%] top-[47%] h-10 w-[150%] rotate-[-16deg] bg-sky-100/70" /><div className="relative z-10 mx-4 flex h-11 items-center gap-2 rounded-full bg-card px-4 shadow-lg"><Search size={17} /><input aria-label="Buscar nesta área" className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar nesta área" /><Navigation size={17} className="text-primary" /></div><div className="relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">{(["Todos", ...categoryOptions.map((item) => item.name)] as Category[]).map((cat) => <Button key={cat} onClick={() => onCategory(cat)} className={`h-8 shrink-0 rounded-full px-3 text-[11px] ${active === cat ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm hover:bg-card"}`}>{cat}</Button>)}</div>
     {visible.map((place) => { const category = categoryOptions.find((item) => item.name === place.category); const Icon = category?.icon ?? MapPin; return <Button key={place.id} aria-label={`Abrir ${place.name}`} onClick={() => onDetail(place)} style={{ left: place.x, top: place.y }} className="absolute z-10 h-auto -translate-x-1/2 flex-col gap-0 bg-transparent p-0 text-[10px] text-foreground shadow-none hover:bg-transparent"><span className={`grid size-10 place-items-center rounded-full border-2 border-background text-primary-foreground shadow-lg ${category?.tone ?? "bg-primary"}`}><Icon size={17} /></span><span className="mt-1 max-w-24 rounded bg-background/85 px-1.5 py-0.5 leading-tight backdrop-blur">{place.area}</span></Button>; })}
-    {visible.length > 0 && <Button variant="ghost" onClick={() => onDetail(visible[0])} className="absolute bottom-24 left-4 right-20 z-10 h-auto justify-start gap-3 rounded-2xl bg-card p-2 text-left shadow-lg hover:bg-card"><img src={visible[0].image} alt="" className="size-14 rounded-xl object-cover" /><span className="min-w-0"><b className="block truncate text-xs">{visible[0].name}</b><small className="text-muted-foreground">★ {visible[0].rating} · {visible[0].area}</small></span></Button>}<Button aria-label="Minha localização" className="absolute bottom-24 right-4 z-10 size-12 rounded-full bg-card p-0 text-primary shadow-lg hover:bg-card"><Navigation size={20} /></Button><BottomNav active="map" onNavigate={onNavigate} onAdd={onAdd} />
+    {firstVisible && <Button variant="ghost" onClick={() => onDetail(firstVisible)} className="absolute bottom-24 left-4 right-20 z-10 h-auto justify-start gap-3 rounded-2xl bg-card p-2 text-left shadow-lg hover:bg-card"><img src={firstVisible.image} alt="" className="size-14 rounded-xl object-cover" /><span className="min-w-0"><b className="block truncate text-xs">{firstVisible.name}</b><small className="text-muted-foreground">★ {firstVisible.rating} · {firstVisible.area}</small></span></Button>}<Button aria-label="Minha localização" className="absolute bottom-24 right-4 z-10 size-12 rounded-full bg-card p-0 text-primary shadow-lg hover:bg-card"><Navigation size={20} /></Button><BottomNav active="map" onNavigate={onNavigate} onAdd={onAdd} />
   </section>;
 }
 
