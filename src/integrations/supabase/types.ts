@@ -315,6 +315,47 @@ export type Database = {
           },
         ]
       }
+      place_situations: {
+        Row: {
+          created_at: string
+          expires_at: string
+          hidden: boolean
+          id: string
+          kind: string
+          place_id: string
+          situations: string[]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          hidden?: boolean
+          id?: string
+          kind: string
+          place_id: string
+          situations?: string[]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          hidden?: boolean
+          id?: string
+          kind?: string
+          place_id?: string
+          situations?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "place_situations_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["google_place_id"]
+          },
+        ]
+      }
       places: {
         Row: {
           address: string | null
@@ -404,6 +445,38 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "places"
             referencedColumns: ["google_place_id"]
+          },
+        ]
+      }
+      situation_reports: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          reporter: string
+          situation_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reporter: string
+          situation_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reporter?: string
+          situation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "situation_reports_situation_id_fkey"
+            columns: ["situation_id"]
+            isOneToOne: false
+            referencedRelation: "place_situations"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -502,6 +575,17 @@ export type Database = {
           is_me: boolean
           mode: string
           user_id: string
+        }[]
+      }
+      place_situation_now: {
+        Args: { _place_ids: string[] }
+        Returns: {
+          expires_at: string
+          people_here: number
+          place_id: string
+          situation_id: string
+          situations: string[]
+          updated_at: string
         }[]
       }
       respond_connection: {
