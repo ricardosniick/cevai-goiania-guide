@@ -58,8 +58,9 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     const eligible = mobile && !isStandalone() && !dismissed;
     const delay = shared ? 4000 : 2500;
     let t: number | undefined;
-    // iOS has no native prompt: show instructions after the delay.
-    if (eligible && isIos) t = window.setTimeout(() => setOpen(true), delay);
+    // Show the card after the delay; on Android the native prompt is used when Chrome provides it,
+    // otherwise the card explains the browser menu option.
+    if (eligible) t = window.setTimeout(() => setOpen(true), delay);
     const w = window as unknown as { __cevaiBIP?: BIPEvent | undefined };
     const takeEvent = (e: BIPEvent) => {
       setDeferred(e);
@@ -85,17 +86,19 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     setOpen(false);
   };
 
-  // Android/desktop without a native prompt available: nothing to offer.
-  if (!open || (!ios && !deferred)) return null;
+  if (!open) return null;
+  const manual = !ios && !deferred; // Android browser hasn't offered its install prompt (yet)
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] p-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))]">
       <div role="dialog" aria-labelledby="install-title" className="pointer-events-auto animate-in slide-in-from-bottom fade-in rounded-2xl border border-border bg-background p-4 shadow-xl">
         <div className="flex items-start gap-3">
           <img src="/icon-192.png" alt="" className="size-12 shrink-0 rounded-xl shadow" />
           <div className="min-w-0 flex-1">
-            <h2 id="install-title" className="font-display text-base font-black">📲 Instale o Cê Vai?</h2>
+            <h2 id="install-title" className="font-display text-base font-black">{ios ? "📲 Instale o Cê Vai?" : "📲 Tenha o Cê Vai? na tela inicial"}</h2>
             {ios ? (
               <p className="mt-0.5 text-sm text-muted-foreground">Toque em Compartilhar <Share size={14} className="inline -mt-0.5 text-primary" /> e depois em <b>Adicionar à Tela de Início</b>.</p>
+            ) : manual ? (
+              <p className="mt-0.5 text-sm text-muted-foreground">Toque no menu <b>⋮</b> do navegador e escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</p>
             ) : (
               <p className="mt-0.5 text-sm text-muted-foreground">Tenha o Cê Vai? na tela inicial para acessar seus lugares e experiências com mais facilidade.</p>
             )}
@@ -104,7 +107,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
         </div>
         <div className="mt-3 flex gap-2">
           <Button variant="ghost" onClick={close} className="h-10 flex-1 rounded-full text-sm font-bold">Continuar no navegador</Button>
-          <Button onClick={() => (ios ? close() : void install())} className="h-10 flex-1 rounded-full text-sm font-extrabold">{ios ? "Entendi" : "Instalar Cê Vai?"}</Button>
+          <Button onClick={() => (ios || manual ? close() : void install())} className="h-10 flex-1 rounded-full text-sm font-extrabold">{ios || manual ? "Entendi" : "Instalar Cê Vai?"}</Button>
         </div>
       </div>
     </div>
