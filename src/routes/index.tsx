@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
+  ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
   Lock, LogOut, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
@@ -12,37 +12,21 @@ import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
-import { MapView, CATEGORY_COLORS, type MapMarker } from "@/components/cevai/MapView";
+import { MapView, type MapMarker } from "@/components/cevai/MapView";
+import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS } from "@/lib/categories";
 
-type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile";
+type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile" | "categories";
 type MainScreen = "home" | "map" | "saved" | "profile";
 type LatLng = { lat: number; lng: number };
 type SavedList = "quero_conhecer" | "ja_fui" | "favoritos";
 
-const CATEGORIES = [
-  { name: "Restaurantes", emoji: "🍴" },
-  { name: "Cafés", emoji: "☕" },
-  { name: "Parques", emoji: "🌳" },
-  { name: "Hotéis", emoji: "🏨" },
-  { name: "Lojas", emoji: "🛍️" },
-  { name: "Cultura", emoji: "🎭" },
-  { name: "Saúde", emoji: "🏥" },
-] as const;
-const emojiOf = (c: string) => CATEGORIES.find((x) => x.name === c)?.emoji ?? "📍";
-
-const CRITERIA: Record<string, string[]> = {
-  Restaurantes: ["Comida", "Atendimento", "Ambiente", "Custo-benefício"],
-  Cafés: ["Comida", "Atendimento", "Ambiente", "Custo-benefício"],
-  Hotéis: ["Conforto", "Localização", "Limpeza", "Atendimento"],
-  Parques: ["Estrutura", "Segurança", "Ambiente", "Acessibilidade"],
-  Saúde: ["Atendimento", "Organização", "Pontualidade", "Clareza"],
-};
-const criteriaFor = (c: string) => CRITERIA[c] ?? ["Atendimento", "Ambiente", "Custo-benefício", "Experiência"];
+const emojiOf = emojiOfLabel;
 
 const LIST_LABELS: Record<SavedList, string> = { quero_conhecer: "Quero conhecer", ja_fui: "Já fui", favoritos: "Favoritos" };
 
+type Stall = { id: string; place_id: string; name: string; kind: string; emoji: string; created_by: string };
 type Experience = {
-  id: string; place_id: string; category: string; rating: number; comment: string | null; would_return: boolean; is_public: boolean; created_at: string; user_id: string;
+  id: string; place_id: string; stall_id: string | null; stall: { name: string; emoji: string } | null; category: string; rating: number; comment: string | null; would_return: boolean; is_public: boolean; created_at: string; user_id: string;
   place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
   scores: Array<{ criterion: string; score: number }>;
   photos: string[];
@@ -84,7 +68,7 @@ function CeVaiApp() {
   const [location, setLocation] = useState<LatLng | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null }>({ open: false, place: null });
+  const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null; stall?: Stall | null }>({ open: false, place: null });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
   const queryClient = useQueryClient();
@@ -127,9 +111,9 @@ function CeVaiApp() {
   useEffect(() => { if (user) locate(); }, [user, locate]);
 
   const openPlace = (id: string, from: MainScreen) => { setPlaceId(id); setReturnTo(from); go("detail"); };
-  const openModal = (place: PlaceSummary | null = null) => {
+  const openModal = (place: PlaceSummary | null = null, stall: Stall | null = null) => {
     if (!user) { notify("Entre na sua conta para registrar experiências."); go("login"); return; }
-    setModal({ open: true, place });
+    setModal({ open: true, place, stall });
   };
   const onAuthed = (u: User) => { setUser(u); go("home"); };
 
@@ -146,14 +130,15 @@ function CeVaiApp() {
           {screen === "signup-done" && <SignupDoneScreen confirmed={!!user} onContinue={() => go(user ? "home" : "login")} />}
           {screen === "forgot" && <ForgotScreen onBack={() => go("login", true)} notify={notify} />}
           {screen === "new-password" && <NewPasswordScreen onDone={() => go("home")} notify={notify} />}
-          {screen === "home" && <HomeScreen user={user} center={center} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} />}
+          {screen === "home" && <HomeScreen user={user} center={center} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} />}
+          {screen === "categories" && <CategoriesScreen value={category} onBack={() => go("home", true)} onPick={(k) => { setCategory(k); go("home", true); }} />}
           {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
           {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} notify={notify} />}
           {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} />}
           {screen === "profile" && <ProfileScreen user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} />}
         </div>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
-        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); notify("Experiência registrada!"); }} notify={notify} />}
+        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify("Experiência registrada!"); }} notify={notify} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
       </div>
     </main>
@@ -327,11 +312,26 @@ function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares r
   </div>;
 }
 
-function CategoryChips({ value, onChange, withAll = false, className = "" }: { value: string | null; onChange: (c: string | null) => void; withAll?: boolean; className?: string }) {
+function CategoryChips({ value, onChange, chips, withAll = false, onAll, className = "" }: { value: string | null; onChange: (c: string | null) => void; chips: string[]; withAll?: boolean; onAll?: () => void; className?: string }) {
+  const extra = value && !chips.includes(value) ? [value] : [];
   return <div className={`flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] ${className}`}>
     {withAll && <button onClick={() => onChange(null)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold shadow-sm ${value === null ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>Todos</button>}
-    {CATEGORIES.map((c) => <button key={c.name} onClick={() => onChange(value === c.name ? null : c.name)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-sm transition ${value === c.name ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}><span>{c.emoji}</span>{c.name}</button>)}
+    {[...extra, ...chips].map((k) => <button key={k} onClick={() => onChange(value === k ? null : k)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-sm transition ${value === k ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}><span>{filterEmoji(k)}</span>{filterLabel(k)}</button>)}
+    {onAll && <button onClick={onAll} className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary/40 px-4 py-2 text-sm font-extrabold text-primary">Ver todas<ChevronRight size={14} /></button>}
   </div>;
+}
+
+function CategoriesScreen({ value, onBack, onPick }: { value: string | null; onBack: () => void; onPick: (k: string) => void }) {
+  return <section className="h-full overflow-y-auto pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="flex items-center gap-2 px-3"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full"><ArrowLeft /></Button><h1 className="font-display text-2xl font-black">Todas as categorias</h1></div>
+    <div className="mt-2 space-y-6 px-5">
+      {GROUPS.filter((g) => g.key !== "cafes-g").map((g) => <div key={g.key}>
+        <button onClick={() => onPick(g.key)} className="flex w-full items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: g.color }}>{g.emoji} {g.label}</h2><span className="text-[11px] font-bold text-muted-foreground">Ver tudo</span></button>
+        <div className="mt-2 grid grid-cols-2 gap-2">{g.subs.map((sub) => <button key={sub.key} onClick={() => onPick(sub.key)} className={`flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm font-bold shadow-sm ${value === sub.key ? "bg-primary text-primary-foreground" : "bg-card"}`}><span className="text-lg">{sub.emoji}</span><span className="min-w-0 truncate">{sub.label}</span></button>)}</div>
+      </div>)}
+      <p className="rounded-2xl bg-muted p-4 text-xs text-muted-foreground">📚 Livros ficam no seu Perfil — eles não são lugares do mapa.</p>
+    </div>
+  </section>;
 }
 
 function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
@@ -346,7 +346,7 @@ function ErrorBox({ error }: { error: unknown }) {
 
 /* ---------------- Explorar ---------------- */
 
-function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { user: User | null; center: LatLng; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void }) {
+function HomeScreen({ user, center, category, onCategory, onOpen, onLogin, onAll }: { user: User | null; center: LatLng; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   useEffect(() => { const t = window.setTimeout(() => setQuery(input.trim()), 500); return () => window.clearTimeout(t); }, [input]);
   const places = usePlaces(user, center, category, query);
@@ -359,7 +359,7 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
   const stats = usePlaceStats(user, (places.data ?? []).map((p) => p.id));
   return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
     <header className="flex items-start justify-between px-5">
-      <div><p className="text-[11px] font-extrabold tracking-[0.14em] text-secondary">{weekday}, GOIÂNIA</p><h1 className="mt-1 font-display text-[1.9rem] font-black leading-tight">Cê vai onde?</h1></div>
+      <div><p className="text-[11px] font-extrabold tracking-[0.14em] text-secondary">{weekday}, GOIÂNIA</p><h1 className="mt-1 font-display text-[1.9rem] font-black leading-tight">Cê vai aonde?</h1></div>
       <Logo size="sm" />
     </header>
     <form onSubmit={(e) => { e.preventDefault(); setQuery(input.trim()); }} className="mx-5 mt-4 flex h-12 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm">
@@ -367,9 +367,9 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
       <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" />
       {input && <button type="button" aria-label="Limpar busca" onClick={() => { setInput(""); setQuery(""); }}><X size={18} className="text-muted-foreground" /></button>}
     </form>
-    <CategoryChips value={category} onChange={onCategory} className="mt-4" />
+    <CategoryChips value={category} onChange={onCategory} chips={HOME_CHIPS} onAll={onAll} className="mt-4" />
     {!user ? <LoginPrompt onLogin={onLogin} /> : <>
-      <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${emojiOf(category)} ${category} perto de você` : "Destaques da cidade"}</h2></div>
+      <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${filterEmoji(category)} ${filterLabel(category)} perto de você` : "Destaques da cidade"}</h2></div>
       {places.isError && <ErrorBox error={places.error} />}
       {places.isLoading && <div className="mt-3 space-y-3 px-5"><Skeleton className="h-56" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>}
       {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
@@ -377,6 +377,7 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
         <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
         <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><span>· {formatKm(distanceKm(center, first))}</span></p><p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p></div>
       </button>}
+      {stallHits.data && stallHits.data.length > 0 && <div className="mt-5 px-5"><p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Barraquinhas cadastradas pela comunidade</p><div className="mt-2 space-y-2">{stallHits.data.map((st) => <button key={st.id} onClick={() => onOpen(st.place_id)} className="flex w-full items-center gap-3 rounded-2xl bg-card p-3 text-left shadow-sm"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted text-xl">{st.emoji}</span><div className="min-w-0"><p className="truncate font-bold">{st.name}</p><p className="truncate text-xs text-muted-foreground">em {st.fair?.name ?? "feira"}</p></div></button>)}</div></div>}
       <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} stat={stats.data?.[p.id]} onOpen={() => onOpen(p.id)} />)}</div>
       {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
     </>}
@@ -434,7 +435,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
         <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar no mapa" placeholder="Buscar lugar no mapa" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none" />
         {query && <button type="button" aria-label="Limpar" onClick={() => { setInput(""); setQuery(""); }}><X size={18} /></button>}
       </form>
-      <CategoryChips value={category} onChange={(c) => { setSelected(null); onCategory(c); }} withAll />
+      <CategoryChips value={category} onChange={(c) => { setSelected(null); onCategory(c); }} chips={MAP_CHIPS} withAll />
     </div>
     <button onClick={onLocate} aria-label="Minha localização" className="absolute right-4 z-10 grid size-12 place-items-center rounded-full bg-card text-primary shadow-lg" style={{ bottom: current ? "13.5rem" : "1.25rem" }}><Crosshair size={22} /></button>
     {!user && <div className="absolute inset-x-0 bottom-4 z-10"><LoginPrompt onLogin={onLogin} text="Entre para ver lugares reais perto de você no mapa." /></div>}
@@ -443,7 +444,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
     {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
       <div className="flex gap-3 p-3">
         <PlacePhoto src={current.photoUrl} alt={current.name} className="size-24 shrink-0 rounded-xl" />
-        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: CATEGORY_COLORS[current.category] }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p><CeVaiRating stat={stats.data?.[current.id]} /></div>
+        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p><CeVaiRating stat={stats.data?.[current.id]} /></div>
         <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
       </div>
       <div className="px-3 pb-3"><Button onClick={() => onOpen(current.id)} className="h-11 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Ver lugar</Button></div>
@@ -453,10 +454,11 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
 
 /* ---------------- Data: experiences & saved ---------------- */
 
-async function loadExperiences(filter: { userId?: string; placeId?: string }): Promise<Experience[]> {
-  let q = supabase.from("experiences").select("id, place_id, category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
+async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }): Promise<Experience[]> {
+  let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
   if (filter.userId) q = q.eq("user_id", filter.userId);
   if (filter.placeId) q = q.eq("place_id", filter.placeId);
+  if (filter.stallId) q = q.eq("stall_id", filter.stallId);
   const { data, error } = await q;
   if (error) throw error;
   const paths = (data ?? []).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path));
@@ -465,7 +467,7 @@ async function loadExperiences(filter: { userId?: string; placeId?: string }): P
     const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
     signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
   }
-  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u) }));
+  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u) }));
 }
 
 function useSaved(user: User | null) {
@@ -567,6 +569,7 @@ function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experien
     {exp.photos.length > 0 && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
     <div className="p-4">
       {showPlace && <button onClick={onOpen} className="mb-1 font-display text-base font-black text-left">{exp.place?.name ?? "Lugar"}</button>}
+      {exp.stall && <p className="mb-1 text-xs font-extrabold text-secondary">{exp.stall.emoji} Barraquinha: {exp.stall.name}</p>}
       <div className="flex items-center justify-between"><Stars value={exp.rating} /><span className="text-[11px] font-bold text-muted-foreground">{own ? "Você" : "Comunidade"} · {date}</span></div>
       {exp.comment && <p className="mt-2 text-sm leading-relaxed text-foreground/85">{exp.comment}</p>}
       {exp.scores.length > 0 && <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">{exp.scores.map((s) => <p key={s.criterion} className="flex justify-between text-[11px] text-muted-foreground"><span>{s.criterion}</span><span className="font-extrabold text-foreground">{s.score}/5</span></p>)}</div>}
