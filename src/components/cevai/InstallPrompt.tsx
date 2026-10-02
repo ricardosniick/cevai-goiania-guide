@@ -60,7 +60,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     let t: number | undefined;
     // iOS has no native prompt: show instructions after the delay.
     if (eligible && isIos) t = window.setTimeout(() => setOpen(true), delay);
-    const w = window as unknown as { __cevaiBIP?: BIPEvent };
+    const w = window as unknown as { __cevaiBIP?: BIPEvent | undefined };
     const useEvent = (e: BIPEvent) => {
       setDeferred(e);
       if (eligible) { window.clearTimeout(t); t = window.setTimeout(() => setOpen(true), delay); }
@@ -80,7 +80,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     await deferred.prompt();
     const choice = await deferred.userChoice;
     setDeferred(null);
-    (window as unknown as { __cevaiBIP?: BIPEvent }).__cevaiBIP = undefined;
+    (window as unknown as { __cevaiBIP?: BIPEvent | undefined }).__cevaiBIP = undefined;
     if (choice.outcome === "accepted") localStorage.setItem(DISMISS_KEY, "1");
     setOpen(false);
   };
