@@ -351,6 +351,10 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
   useEffect(() => { const t = window.setTimeout(() => setQuery(input.trim()), 500); return () => window.clearTimeout(t); }, [input]);
   const places = usePlaces(user, center, category, query);
   const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date()).toUpperCase();
+  const stallHits = useQuery({
+    queryKey: ["stall-search", query], enabled: !!user && query.length >= 2,
+    queryFn: async () => { const { data } = await supabase.from("fair_stalls").select("id, place_id, name, emoji, fair:places(name)").ilike("name", `%${query.replace(/[%_,()]/g, "")}%`).limit(5); return data ?? []; },
+  });
   const [first, ...rest] = places.data ?? [];
   const stats = usePlaceStats(user, (places.data ?? []).map((p) => p.id));
   return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
