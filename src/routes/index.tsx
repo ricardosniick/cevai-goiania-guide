@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
+import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
@@ -182,19 +183,14 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   return <section className="relative h-full min-h-dvh overflow-hidden bg-primary">
-    <img src={flamboyantReal.url} className="absolute inset-0 h-full w-full object-cover object-[center_40%]" alt="Parque Flamboyant e os prédios do Jardim Goiás, em Goiânia" />
-    <div className="absolute inset-0 bg-gradient-to-b from-primary/30 via-transparent to-primary" />
-    <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-primary via-primary/85 to-transparent" />
+    <img src={welcomeArt.url} className="absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]" alt="Cê Vai? — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
+    <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-primary via-primary/80 to-transparent" />
     <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="inline-flex w-fit rounded-2xl bg-background/95 px-4 py-2 shadow-lg"><Logo size="md" /></div>
-      <h1 className="mt-5 font-display text-[1.9rem] font-black leading-tight text-primary-foreground">O mapa das suas escolhas.</h1>
-      <p className="mt-2 text-base font-semibold text-primary-foreground/85">Onde você foi e se vale a pena voltar.</p>
-      <div className="mt-8 space-y-3">
+      <div className="space-y-3">
         <Button disabled={!ready} onClick={onSignup} className="h-[52px] w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground shadow-lg hover:bg-secondary/90">Criar conta</Button>
-        <Button disabled={!ready} onClick={onLogin} variant="outline" className="h-[52px] w-full rounded-full border-2 border-primary-foreground/80 bg-transparent text-base font-extrabold text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Entrar</Button>
-        <button onClick={onExplore} className="block w-full py-2 text-sm font-bold text-primary-foreground/85 underline underline-offset-4">Explorar sem entrar</button>
+        <Button disabled={!ready} onClick={onLogin} variant="outline" className="h-[52px] w-full rounded-full border-2 border-primary-foreground/80 bg-primary/30 text-base font-extrabold text-primary-foreground backdrop-blur-sm hover:bg-primary-foreground/10 hover:text-primary-foreground">Entrar</Button>
+        <button onClick={onExplore} className="block w-full py-2 text-sm font-bold text-primary-foreground underline underline-offset-4">Explorar sem entrar</button>
       </div>
-      <p className="mt-1 text-center text-[9px] text-primary-foreground/45">Foto: Fronteira / Wikimedia Commons, CC BY-SA 4.0</p>
     </div>
   </section>;
 }
