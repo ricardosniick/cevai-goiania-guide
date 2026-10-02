@@ -16,6 +16,7 @@ import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
+import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
 import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
@@ -444,8 +445,10 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const places = usePlaces(user, center, category, query);
-  const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: p.name })), [places.data]);
+  const sits = useSituations(user, (places.data ?? []).map((p) => p.id));
+  const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => { const st = sits.data?.[p.id]?.situations; return { id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: st?.length ? `${p.name} · ${st[0]}` : p.name, badge: st?.[0]?.split(" ")[0] }; }), [places.data, sits.data]);
   const current = places.data?.find((p) => p.id === selected) ?? null;
+  const curSit = current ? sits.data?.[current.id] : undefined;
   const stats = usePlaceStats(user, current ? [current.id] : []);
   return <section className="relative h-full">
     <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} className="absolute inset-0" />
@@ -464,7 +467,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
     {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
       <div className="flex gap-3 p-3">
         <PlacePhoto src={current.photoUrl} alt={current.name} className="size-24 shrink-0 rounded-xl" />
-        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p><CeVaiRating stat={stats.data?.[current.id]} /></div>
+        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p><CeVaiRating stat={stats.data?.[current.id]} />{curSit?.situations?.length && curSit.updated_at ? <p className="mt-1 truncate text-[11px] font-bold text-secondary">📍 {curSit.situations.join(" · ")} · {updatedAgo(curSit.updated_at).replace("Atualizado ", "")}</p> : null}</div>
         <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
       </div>
       <div className="px-3 pb-3"><Button onClick={() => onOpen(current.id)} className="h-11 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Ver lugar</Button></div>
@@ -542,6 +545,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
             <div className="rounded-2xl border border-border bg-muted/60 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avaliação do Google</p><p className="mt-1 text-sm font-black"><GoogleRating rating={p.rating} count={p.ratingCount} size="md" /></p><p className="mt-1 text-[10px] text-muted-foreground">Informação externa</p></div>
             <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê Vai?</p>{(() => { const st = stats.data?.[p.id]; return st?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(st.avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{st.count} {st.count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê Vai?.</p>; })()}</div>
           </div>
+          {user && <SituationPanel user={user} place={p} notify={notify} />}
           {user && allowsPresence(p.category) && <PresencePanel user={user} place={p} notify={notify} />}
         </div>
         <div className="sticky top-0 z-10 mt-4 flex border-b border-border bg-background px-5">
