@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      books: {
+        Row: {
+          author: string | null
+          comment: string | null
+          created_at: string
+          id: string
+          is_public: boolean
+          photo_path: string | null
+          rating: number | null
+          status: string
+          title: string
+          user_id: string
+          would_recommend: boolean | null
+        }
+        Insert: {
+          author?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          photo_path?: string | null
+          rating?: number | null
+          status?: string
+          title: string
+          user_id: string
+          would_recommend?: boolean | null
+        }
+        Update: {
+          author?: string | null
+          comment?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          photo_path?: string | null
+          rating?: number | null
+          status?: string
+          title?: string
+          user_id?: string
+          would_recommend?: boolean | null
+        }
+        Relationships: []
+      }
       experience_photos: {
         Row: {
           created_at: string
@@ -84,6 +126,7 @@ export type Database = {
           is_public: boolean
           place_id: string
           rating: number
+          stall_id: string | null
           user_id: string
           visited_at: string
           would_return: boolean
@@ -96,6 +139,7 @@ export type Database = {
           is_public?: boolean
           place_id: string
           rating: number
+          stall_id?: string | null
           user_id: string
           visited_at?: string
           would_return?: boolean
@@ -108,6 +152,7 @@ export type Database = {
           is_public?: boolean
           place_id?: string
           rating?: number
+          stall_id?: string | null
           user_id?: string
           visited_at?: string
           would_return?: boolean
@@ -115,6 +160,51 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "experiences_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["google_place_id"]
+          },
+          {
+            foreignKeyName: "experiences_stall_id_fkey"
+            columns: ["stall_id"]
+            isOneToOne: false
+            referencedRelation: "fair_stalls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fair_stalls: {
+        Row: {
+          created_at: string
+          created_by: string
+          emoji: string
+          id: string
+          kind: string
+          name: string
+          place_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          emoji?: string
+          id?: string
+          kind?: string
+          name: string
+          place_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          emoji?: string
+          id?: string
+          kind?: string
+          name?: string
+          place_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fair_stalls_place_id_fkey"
             columns: ["place_id"]
             isOneToOne: false
             referencedRelation: "places"
@@ -225,6 +315,14 @@ export type Database = {
           avg_rating: number
           experience_count: number
           place_id: string
+        }[]
+      }
+      stall_experience_stats: {
+        Args: { _stall_ids: string[] }
+        Returns: {
+          avg_rating: number
+          experience_count: number
+          stall_id: string
         }[]
       }
     }
