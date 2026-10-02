@@ -314,10 +314,11 @@ function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares r
 
 function CategoryChips({ value, onChange, chips, withAll = false, onAll, className = "" }: { value: string | null; onChange: (c: string | null) => void; chips: string[]; withAll?: boolean; onAll?: () => void; className?: string }) {
   const extra = value && !chips.includes(value) ? [value] : [];
-  return <div className={`flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] ${className}`}>
+  return <div className={`flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto overscroll-x-contain scroll-smooth whitespace-nowrap py-1 pl-5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden ${className}`}>
     {withAll && <button onClick={() => onChange(null)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold shadow-sm ${value === null ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>Todos</button>}
     {[...extra, ...chips].map((k) => <button key={k} onClick={() => onChange(value === k ? null : k)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-sm transition ${value === k ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}><span>{filterEmoji(k)}</span>{filterLabel(k)}</button>)}
     {onAll && <button onClick={onAll} className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary/40 px-4 py-2 text-sm font-extrabold text-primary">Ver todas<ChevronRight size={14} /></button>}
+    <span aria-hidden className="w-3 shrink-0" />
   </div>;
 }
 
