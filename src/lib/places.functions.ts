@@ -1,19 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveFilter, categoryFromTypes } from "./categories";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 export const GOIANIA = { lat: -16.6869, lng: -49.2648 };
-
-const CATEGORY_TYPES: Record<string, string[]> = {
-  Restaurantes: ["restaurant"],
-  Cafés: ["cafe", "coffee_shop"],
-  Parques: ["park", "city_park", "national_park", "state_park", "garden", "botanical_garden"],
-  Hotéis: ["lodging"],
-  Lojas: ["shopping_mall", "store"],
-  Cultura: ["museum", "art_gallery", "performing_arts_theater", "cultural_center"],
-  Saúde: ["hospital", "doctor", "dental_clinic", "pharmacy"],
-};
 
 export type PlaceSummary = {
   id: string;
@@ -99,23 +90,16 @@ async function photoUrl(photo: GPhoto | undefined, width = 800): Promise<string 
 }
 
 function categoryOf(place: GPlace): string {
-  const types = [place.primaryType, ...(place.types ?? [])].filter(Boolean) as string[];
-  for (const [category, list] of Object.entries(CATEGORY_TYPES)) {
-    if (types.some((t) => list.includes(t))) return category;
-  }
-  if (types.some((t) => ["bakery", "bar", "meal_takeaway"].includes(t))) return "Restaurantes";
-  if (types.some((t) => ["hotel", "motel"].includes(t))) return "Hotéis";
-  if (types.some((t) => t.includes("clinic") || t.includes("health"))) return "Saúde";
-  return "Outros";
+  return categoryFromTypes([place.primaryType, ...(place.types ?? [])].filter(Boolean) as string[], place.displayName?.text ?? "");
 }
 
-async function toSummary(place: GPlace, width = 600): Promise<PlaceSummary> {
+async function toSummary(place: GPlace, width = 600, forcedCategory?: string): Promise<PlaceSummary> {
   const first = place.photos?.[0];
   return {
     id: place.id,
     name: place.displayName?.text ?? "Lugar",
     address: place.shortFormattedAddress ?? place.formattedAddress ?? "",
-    category: categoryOf(place),
+    category: forcedCategory ?? categoryOf(place),
     typeLabel: place.primaryTypeDisplayName?.text ?? "",
     lat: place.location?.latitude ?? GOIANIA.lat,
     lng: place.location?.longitude ?? GOIANIA.lng,
@@ -133,7 +117,7 @@ const SEARCH_MASK = [
 
 const searchSchema = z.object({
   query: z.string().trim().max(120).optional(),
-  category: z.string().max(30).optional(),
+  category: z.string().max(40).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
 });
@@ -143,18 +127,19 @@ export const searchPlaces = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => searchSchema.parse(data))
   .handler(async ({ data, context }) => {
     const center = { latitude: data.lat ?? GOIANIA.lat, longitude: data.lng ?? GOIANIA.lng };
-    const types = data.category ? CATEGORY_TYPES[data.category] : undefined;
+    const filter = resolveFilter(data.category);
     let result: { places?: GPlace[] };
-    if (data.query) {
+    const textQuery = data.query ? (filter.text ? `${filter.text} ${data.query}` : data.query) : filter.text;
+    if (textQuery) {
       result = await gateway(`/places/v1/places:searchText`, {
         method: "POST",
         headers: headers(SEARCH_MASK),
         body: JSON.stringify({
-          textQuery: data.query,
+          textQuery,
           pageSize: 12,
           languageCode: "pt-BR",
           regionCode: "BR",
-          ...(types?.[0] ? { includedType: types[0] } : {}),
+          ...(data.query && filter.types?.length === 1 ? { includedType: filter.types[0] } : {}),
           locationBias: { circle: { center, radius: 20000 } },
         }),
       });
@@ -163,7 +148,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
         method: "POST",
         headers: headers(SEARCH_MASK),
         body: JSON.stringify({
-          includedTypes: types ?? ["restaurant", "cafe", "park", "tourist_attraction", "shopping_mall", "museum"],
+          includedTypes: filter.types?.length ? filter.types : ["restaurant", "cafe", "park", "tourist_attraction", "shopping_mall", "museum"],
           maxResultCount: 12,
           rankPreference: "POPULARITY",
           languageCode: "pt-BR",
@@ -172,7 +157,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
         }),
       });
     }
-    const places = await Promise.all((result.places ?? []).slice(0, 12).map((p) => toSummary(p)));
+    const forced = !data.query && filter.label ? filter.label : undefined;
+    const places = await Promise.all((result.places ?? []).slice(0, 12).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       await context.supabase.from("places").upsert(
         places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_url: p.photoUrl, updated_at: new Date().toISOString() })),
