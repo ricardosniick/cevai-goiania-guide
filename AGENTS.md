@@ -10,4 +10,4 @@
 <!-- LOVABLE:END -->
 
 - Keep the mobile experience as a single state-driven route; this preserves app-like transitions without unnecessary URL changes.
-- Keep diary entries in browser-local storage until account-based sync is requested; this preserves the current no-login experience.
+- Store experiences, photos and saved places in the backend per user (private by default); real place data comes only from Google Places via authenticated server functions — never fabricate places or use AI images for real venues.
