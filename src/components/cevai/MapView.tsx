@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { colorOfLabel } from "@/lib/categories";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -25,18 +26,35 @@ function loadMaps(): Promise<void> {
   return loader;
 }
 
-export function MapView({ center, user, markers, selectedId, onSelect, className = "" }: {
+export type MapArea = { lat: number; lng: number; radius: number };
+
+function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export function MapView({ center, user, markers, selectedId, onSelect, onIdle, cluster = false, fit = true, className = "" }: {
   center: { lat: number; lng: number };
   user?: { lat: number; lng: number } | null;
   markers: MapMarker[];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  /** Called after the user stops moving/zooming, with the visible area. */
+  onIdle?: (area: MapArea) => void;
+  cluster?: boolean;
+  /** Auto-fit bounds to markers. Disable when the viewport drives the search. */
+  fit?: boolean;
   className?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<any>(null);
   const pins = useRef<any[]>([]);
+  const clusterer = useRef<MarkerClusterer | null>(null);
   const userPin = useRef<any>(null);
+  const idleRef = useRef(onIdle);
+  idleRef.current = onIdle;
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -49,6 +67,14 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
         center, zoom: 13, disableDefaultUI: true, zoomControl: false, clickableIcons: false, gestureHandling: "greedy",
         styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }, { featureType: "transit", stylers: [{ visibility: "off" }] }],
       });
+      map.current.addListener("idle", () => {
+        const b = map.current.getBounds(); const c = map.current.getCenter();
+        if (!b || !c) return;
+        const ctr = { lat: c.lat(), lng: c.lng() };
+        const ne = b.getNorthEast();
+        const radius = Math.round(Math.min(25000, Math.max(300, haversine(ctr, { lat: ne.lat(), lng: ne.lng() }))));
+        idleRef.current?.({ ...ctr, radius });
+      });
       setReady(true);
     }).catch(() => alive && setFailed(true));
     return () => { alive = false; };
@@ -59,15 +85,33 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
     if (!ready) return;
     const g = (window as any).google;
     pins.current.forEach((m) => m.setMap(null));
+    clusterer.current?.clearMarkers();
     pins.current = markers.map((m) => {
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({
-        map: map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, label: m.badge ? { text: m.badge, fontSize: "13px" } : undefined, zIndex: selected ? 10 : 1,
+        map: cluster ? null : map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, label: m.badge ? { text: m.badge, fontSize: "13px" } : undefined, zIndex: selected ? 10 : 1,
         icon: { path: g.maps.SymbolPath.CIRCLE, scale: selected ? 13 : 9, fillColor: colorOfLabel(m.category), fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
       });
       marker.addListener("click", () => onSelect?.(m.id));
       return marker;
     });
+    if (cluster) {
+      if (!clusterer.current) {
+        clusterer.current = new MarkerClusterer({
+          map: map.current,
+          algorithmOptions: { maxZoom: 15, radius: 60 } as any,
+          renderer: {
+            render: ({ count, position }: any) => new g.maps.Marker({
+              position, zIndex: 1000 + count,
+              label: { text: String(count), color: "#ffffff", fontSize: "13px", fontWeight: "800" },
+              icon: { path: g.maps.SymbolPath.CIRCLE, scale: count >= 10 ? 19 : 16, fillColor: "#E86024", fillOpacity: 0.95, strokeColor: "#ffffff", strokeWeight: 3 },
+            }),
+          },
+        });
+      }
+      clusterer.current.addMarkers(pins.current);
+    }
+    if (!fit) return;
     if (markers.length > 1 && !selectedId) {
       const bounds = new g.maps.LatLngBounds();
       markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
@@ -76,7 +120,14 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
     } else if (markers.length === 1 && markers[0]) {
       map.current.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
     }
-  }, [ready, markers, selectedId, onSelect, user]);
+  }, [ready, markers, selectedId, onSelect, user, cluster, fit]);
+
+  // Viewport-driven maps: follow external center changes (e.g. "Minha localização").
+  useEffect(() => {
+    if (!ready || fit) return;
+    map.current.panTo(center);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, fit, center.lat, center.lng]);
 
   useEffect(() => {
     if (!ready) return;
