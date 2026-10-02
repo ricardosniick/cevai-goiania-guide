@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Share, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /** Shared-link helpers: links look like `/?lugar=<googlePlaceId>`. */
 export const PENDING_LINK_KEY = "cevai-pending-link";
-const DISMISS_KEY = "cevai-install-dismissed";
+// v2: resets choices saved during earlier testing; forced test mode never saves a choice.
+const DISMISS_KEY = "cevai-install-dismissed-v2";
 
 export function shareUrlFor(placeId: string) {
   return `${window.location.origin}/?lugar=${encodeURIComponent(placeId)}`;
@@ -43,6 +44,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
   const [open, setOpen] = useState(false);
   const [ios, setIos] = useState(false);
   const [help, setHelp] = useState(false);
+  const forcedRef = useRef(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -51,8 +53,8 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     setIos(isIos);
     const url = new URL(window.location.href);
     const forced = url.searchParams.get("instalar") === "1";
+    forcedRef.current = forced;
     if (forced) {
-      localStorage.removeItem(DISMISS_KEY);
       url.searchParams.delete("instalar");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
@@ -70,7 +72,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     return () => { window.removeEventListener("cevai-bip", onPrompt); window.removeEventListener("appinstalled", onInstalled); window.clearTimeout(t); };
   }, [shared]);
 
-  const close = () => { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); setHelp(false); };
+  const close = () => { if (!forcedRef.current) localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); setHelp(false); };
   const install = async () => {
     // No native prompt from the browser: show the Android menu instructions instead.
     if (!deferred) { setHelp(true); return; }
