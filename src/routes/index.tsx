@@ -307,7 +307,7 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
 
 /* ---------------- Shared pieces ---------------- */
 
-function usePlaces(user: User | null, center: LatLng, category: string | null, query: string, radius?: number) {
+function usePlaces(user: User | null, center: LatLng, category: string | null, query: string, radius?: number, ready = true) {
   const search = useServerFn(searchPlaces);
   // ~1km grid + radius bucket: nearby repeat searches reuse the cached result instead of calling Google again.
   const lat = Math.round(center.lat * 100) / 100; const lng = Math.round(center.lng * 100) / 100;
@@ -315,7 +315,7 @@ function usePlaces(user: User | null, center: LatLng, category: string | null, q
   return useQuery({
     queryKey: ["places", category, query, lat, lng, r ?? null],
     queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng, ...(r ? { radius: r } : {}) } }),
-    enabled: !!user,
+    enabled: !!user && ready,
     staleTime: 10 * 60 * 1000,
     retry: false,
   });
@@ -447,7 +447,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
   const [view, setView] = useState<MapArea | null>(null);
   useEffect(() => { setArea(null); }, [center.lat, center.lng]);
   const onIdle = useCallback((a: MapArea) => { setView(a); setArea((prev) => prev ?? a); }, []);
-  const places = usePlaces(user, area ?? center, category, query, area?.radius);
+  const places = usePlaces(user, area ?? center, category, query, area?.radius, !!area || !!query); // wait for the map's final viewport: one Google call per opening
   const moved = !!(area && view) && (distanceKm(area, view) * 1000 > area.radius * 0.35 || view.radius > area.radius * 1.6 || view.radius < area.radius / 1.6);
   const sits = useSituations(user, (places.data ?? []).map((p) => p.id));
   const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => { const st = sits.data?.[p.id]?.situations; return { id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: st?.length ? `${p.name} · ${st[0]}` : p.name, badge: st?.[0]?.split(" ")[0] }; }), [places.data, sits.data]);
