@@ -19,3 +19,6 @@
 - [x] Explorar com categorias (Restaurantes, Cafés, Parques, Hotéis, Lojas, Cultura, Saúde) e lugares reais.
 - [x] Experiências na conta: critérios por categoria, várias por lugar, privadas; salvos (Quero conhecer/Já fui/Favoritos).
 - [x] Remover lugares e fotos fictícios; revisar consistência mobile em 360/390/412.
+- [x] Categorias em grupos (6 na Home + "Ver todas"), filtros do mapa por grupo, critérios por categoria.
+- [x] Feiras com barraquinhas da comunidade e notas separadas da feira.
+- [x] Livros no Perfil (status, nota, foto, recomendo), privados.

@@ -1,18 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { colorOfLabel } from "@/lib/categories";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string };
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  Restaurantes: "#E86024",
-  Cafés: "#9A5B2E",
-  Parques: "#2F8F5B",
-  Hotéis: "#2F6FB0",
-  Lojas: "#B0377A",
-  Cultura: "#7A4FC2",
-  Saúde: "#D23C4B",
-  Outros: "#123A32",
-};
+export const CATEGORY_COLORS = { Outros: "#123A32" };
 
 let loader: Promise<void> | null = null;
 function loadMaps(): Promise<void> {
@@ -71,7 +63,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({
         map: map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, zIndex: selected ? 10 : 1,
-        icon: { path: g.maps.SymbolPath.CIRCLE, scale: selected ? 13 : 9, fillColor: CATEGORY_COLORS[m.category] ?? CATEGORY_COLORS["Outros"], fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
+        icon: { path: g.maps.SymbolPath.CIRCLE, scale: selected ? 13 : 9, fillColor: colorOfLabel(m.category), fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
       });
       marker.addListener("click", () => onSelect?.(m.id));
       return marker;
