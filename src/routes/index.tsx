@@ -1,330 +1,674 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft,
-  Compass,
-  UserRound, Bell, Bookmark, Camera, Check, ChevronRight, CircleUserRound,
-  Coffee, Eye, EyeOff, Heart, Hotel, LogOut, Map, MapPin, MoreHorizontal,
-  Navigation, Plus, Search, Send, Share2, Star, Stethoscope, Trees, Utensils, X,
+  ArrowLeft, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
+  Lock, LogOut, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
-import goianiaHero from "@/assets/goiania-hero.jpg";
-import restaurantBaru from "@/assets/restaurant-baru.jpg";
-import cafeBiscoito from "@/assets/cafe-biscoito.jpg";
-import parqueFlamboyant from "@/assets/parque-flamboyant.jpg";
-import googleRestaurant from "@/assets/google-place-restaurant.jpg";
-import googlePark from "@/assets/google-place-park.jpg";
-import googleHotel from "@/assets/google-place-hotel.jpg";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import type { User } from "@supabase/supabase-js";
+import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { MapView, CATEGORY_COLORS, type MapMarker } from "@/components/cevai/MapView";
 
-type Screen = "welcome" | "auth" | "home" | "map" | "detail" | "saved" | "profile";
+type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile";
 type MainScreen = "home" | "map" | "saved" | "profile";
-type Category = "Todos" | "Restaurantes" | "Cafés" | "Parques" | "Hotéis" | "Clínicas";
-type Place = {
-  id: string;
-  name: string;
-  category: Exclude<Category, "Todos">;
-  area: string;
-  rating: string;
-  reviews: number;
-  image: string;
-  officialPhotos: string[];
-  googlePlaceId: string;
-  description: string;
-  price: string;
-  x: string;
-  y: string;
+type LatLng = { lat: number; lng: number };
+type SavedList = "quero_conhecer" | "ja_fui" | "favoritos";
+
+const CATEGORIES = [
+  { name: "Restaurantes", emoji: "🍴" },
+  { name: "Cafés", emoji: "☕" },
+  { name: "Parques", emoji: "🌳" },
+  { name: "Hotéis", emoji: "🏨" },
+  { name: "Lojas", emoji: "🛍️" },
+  { name: "Cultura", emoji: "🎭" },
+  { name: "Saúde", emoji: "🏥" },
+] as const;
+const emojiOf = (c: string) => CATEGORIES.find((x) => x.name === c)?.emoji ?? "📍";
+
+const CRITERIA: Record<string, string[]> = {
+  Restaurantes: ["Comida", "Atendimento", "Ambiente", "Custo-benefício"],
+  Cafés: ["Comida", "Atendimento", "Ambiente", "Custo-benefício"],
+  Hotéis: ["Conforto", "Localização", "Limpeza", "Atendimento"],
+  Parques: ["Estrutura", "Segurança", "Ambiente", "Acessibilidade"],
+  Saúde: ["Atendimento", "Organização", "Pontualidade", "Clareza"],
 };
-type DiaryEntry = {
-  id: string;
-  placeId: string;
-  placeName: string;
-  location: string;
-  category: Exclude<Category, "Todos">;
-  review: string;
-  rating: number;
-  wouldReturn: boolean;
-  photo: string | null;
-  createdAt: string;
-};
-type ExperienceDraft = Omit<DiaryEntry, "id" | "createdAt" | "placeId">;
+const criteriaFor = (c: string) => CRITERIA[c] ?? ["Atendimento", "Ambiente", "Custo-benefício", "Experiência"];
 
-const categoryOptions: Array<{ name: Exclude<Category, "Todos">; icon: typeof Utensils; tone: string }> = [
-  { name: "Restaurantes", icon: Utensils, tone: "bg-secondary text-secondary-foreground" },
-  { name: "Cafés", icon: Coffee, tone: "bg-amber-100 text-amber-800" },
-  { name: "Parques", icon: Trees, tone: "bg-emerald-100 text-emerald-700" },
-  { name: "Hotéis", icon: Hotel, tone: "bg-sky-100 text-sky-700" },
-  { name: "Clínicas", icon: Stethoscope, tone: "bg-rose-100 text-rose-700" },
-];
+const LIST_LABELS: Record<SavedList, string> = { quero_conhecer: "Quero conhecer", ja_fui: "Já fui", favoritos: "Favoritos" };
 
-const places: Place[] = [
-  { id: "baru", googlePlaceId: "ChIJ-simulado-baru-goiania", name: "Baru Restobar", category: "Restaurantes", area: "Setor Marista", rating: "4.8", reviews: 321, image: googleRestaurant, officialPhotos: [googleRestaurant, restaurantBaru, cafeBiscoito], description: "Cozinha brasileira contemporânea, ingredientes do cerrado e um ambiente acolhedor no coração do Marista.", price: "$$", x: "28%", y: "31%" },
-  { id: "biscoito", googlePlaceId: "ChIJ-simulado-cafe-goiania", name: "Café Biscoito", category: "Cafés", area: "Setor Bueno", rating: "4.7", reviews: 184, image: cafeBiscoito, officialPhotos: [cafeBiscoito, googleRestaurant], description: "Cafés especiais, receitas artesanais e um clima tranquilo para desacelerar no Setor Bueno.", price: "$", x: "59%", y: "42%" },
-  { id: "flamboyant", googlePlaceId: "ChIJ-simulado-parque-goiania", name: "Parque Flamboyant", category: "Parques", area: "Jardim Goiás", rating: "4.9", reviews: 508, image: googlePark, officialPhotos: [googlePark, parqueFlamboyant, goianiaHero], description: "Lagos, pistas para caminhada e muito verde para curtir o fim de tarde em Goiânia.", price: "Grátis", x: "76%", y: "27%" },
-  { id: "hotel", googlePlaceId: "ChIJ-simulado-hotel-goiania", name: "Hotel Marista", category: "Hotéis", area: "Setor Marista", rating: "4.6", reviews: 230, image: googleHotel, officialPhotos: [googleHotel, goianiaHero], description: "Hospedagem confortável com vista para a cidade e localização central.", price: "$$$", x: "39%", y: "60%" },
-  { id: "vaca-brava", googlePlaceId: "ChIJ-simulado-vacabrava-goiania", name: "Parque Vaca Brava", category: "Parques", area: "Setor Bueno", rating: "4.8", reviews: 642, image: parqueFlamboyant, officialPhotos: [parqueFlamboyant, googlePark], description: "Um dos cartões-postais verdes de Goiânia, com lago, pista de caminhada e natureza no Setor Bueno.", price: "Grátis", x: "62%", y: "56%" },
-  { id: "clinica", googlePlaceId: "ChIJ-simulado-clinica-goiania", name: "Clínica Marista", category: "Clínicas", area: "Setor Marista", rating: "4.7", reviews: 118, image: googleHotel, officialPhotos: [googleHotel, goianiaHero], description: "Espaço de cuidado e bem-estar com atendimento especializado no Setor Marista.", price: "$$", x: "70%", y: "67%" },
-];
-
-const initialPlace: Place = places[0] ?? {
-  id: "baru",
-  name: "Restaurante Baru",
-  category: "Restaurantes",
-  area: "Setor Marista",
-  rating: "4.8",
-  reviews: 321,
-  image: restaurantBaru,
-  officialPhotos: [restaurantBaru],
-  googlePlaceId: "ChIJ-simulado-baru-goiania",
-  description: "Cozinha brasileira contemporânea no coração do Marista.",
-  price: "$$",
-  x: "28%",
-  y: "31%",
+type Experience = {
+  id: string; place_id: string; category: string; rating: number; comment: string | null; would_return: boolean; is_public: boolean; created_at: string; user_id: string;
+  place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
+  scores: Array<{ criterion: string; score: number }>;
+  photos: string[];
 };
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
-    { title: "Cê Vai? — Descubra Goiânia" },
-    { name: "description", content: "Seu guia para descobrir, salvar e registrar os melhores lugares de Goiânia." },
-    { property: "og:title", content: "Cê Vai? — Descubra Goiânia" },
-    { property: "og:description", content: "Seu guia para descobrir, salvar e registrar os melhores lugares de Goiânia." },
+    { title: "Cê Vai? — O mapa das suas escolhas" },
+    { name: "description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
+    { property: "og:title", content: "Cê Vai? — O mapa das suas escolhas" },
+    { property: "og:description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },
   ]}),
   component: CeVaiApp,
 });
 
+function distanceKm(a: LatLng, b: LatLng) {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+const formatKm = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1).replace(".", ",")} km`);
 
-function Logo({ light = false, compact = false }: { light?: boolean; compact?: boolean }) {
-  return <div className={`font-display font-black tracking-normal ${compact ? "text-3xl" : "text-6xl"} ${light ? "text-primary-foreground" : "text-primary"}`}>Cê <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span></div>;
+function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const cls = size === "lg" ? "text-[2.6rem]" : size === "sm" ? "text-xl" : "text-2xl";
+  return <span className={`font-display font-black leading-none tracking-tight ${cls}`}><span className="text-primary">Cê</span> <span className="text-secondary">Vai?</span></span>;
 }
 
-function StatusBar({ light = false }: { light?: boolean }) {
-  return <div className={`absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between px-6 text-[11px] font-extrabold ${light ? "text-primary-foreground" : "text-foreground"}`}><span>9:41</span><span className="tracking-widest">● ◒ ▰</span></div>;
-}
+/* ---------------- App shell ---------------- */
 
 function CeVaiApp() {
   const [screen, setScreen] = useState<Screen>("welcome");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [previousScreen, setPreviousScreen] = useState<MainScreen>("home");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<Category>("Todos");
-  const [selectedPlace, setSelectedPlace] = useState<Place>(initialPlace);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [returnTo, setReturnTo] = useState<MainScreen>("home");
   const [user, setUser] = useState<User | null>(null);
-  const [profileName, setProfileName] = useState("Ricardo");
+  const [authReady, setAuthReady] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [location, setLocation] = useState<LatLng | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null }>({ open: false, place: null });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem("ce-vai-diary");
-      if (stored) setDiaryEntries(JSON.parse(stored) as DiaryEntry[]);
-    } catch {
-      window.localStorage.removeItem("ce-vai-diary");
-    }
-  }, []);
-  useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  const notify = (message: string) => {
+  const notify = useCallback((m: string) => {
     window.clearTimeout(toastTimer.current);
-    setToast(message);
-    toastTimer.current = window.setTimeout(() => setToast(""), 1800);
-  };
-  const go = (next: Screen, backwards = false) => {
-    setDirection(backwards ? "back" : "forward");
-    setScreen(next);
-  };
-  const openDetail = (place: Place, from: MainScreen) => {
-    setSelectedPlace(place);
-    setPreviousScreen(from);
-    go("detail");
-  };
-  const toggleSaved = (place: Place) => {
-    setSavedIds((current) => {
-      const next = new Set(current);
-      if (next.has(place.id)) next.delete(place.id); else next.add(place.id);
-      return next;
+    setToast(m);
+    toastTimer.current = window.setTimeout(() => setToast(""), 2400);
+  }, []);
+  const go = useCallback((next: Screen, back = false) => { setDirection(back ? "back" : "forward"); setScreen(next); }, []);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setAuthReady(true);
+      if (data.session?.user) go("home");
     });
-    notify(savedIds.has(place.id) ? "Removido dos salvos" : "Lugar salvo!");
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (event === "PASSWORD_RECOVERY") go("new-password");
+      if (event === "SIGNED_OUT") queryClient.clear();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [go, queryClient]);
+
+  useEffect(() => {
+    if (!user) return;
+    setProfileName(user.user_metadata?.["full_name"] ?? user.email?.split("@")[0] ?? "");
+    void supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle().then(({ data }) => { if (data?.full_name) setProfileName(data.full_name); });
+  }, [user]);
+
+  const locate = useCallback((announce = false) => {
+    if (!("geolocation" in navigator)) { if (announce) notify("Localização indisponível neste aparelho."); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => setLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => { if (announce) notify("Sem acesso à localização. Mostrando Goiânia."); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  }, [notify]);
+  useEffect(() => { if (user) locate(); }, [user, locate]);
+
+  const openPlace = (id: string, from: MainScreen) => { setPlaceId(id); setReturnTo(from); go("detail"); };
+  const openModal = (place: PlaceSummary | null = null) => {
+    if (!user) { notify("Entre na sua conta para registrar experiências."); go("login"); return; }
+    setModal({ open: true, place });
   };
-  const publishExperience = (draft: ExperienceDraft) => {
-    const matchedPlace = places.find((place) => place.name.toLocaleLowerCase() === draft.placeName.trim().toLocaleLowerCase()) ?? selectedPlace;
-    const entry: DiaryEntry = { ...draft, id: `${Date.now()}`, placeId: matchedPlace.id, createdAt: new Date().toISOString() };
-    const nextEntries = [entry, ...diaryEntries];
-    setDiaryEntries(nextEntries);
-    window.localStorage.setItem("ce-vai-diary", JSON.stringify(nextEntries));
-    setModalOpen(false);
-    notify("Experiência salva no seu diário!");
-  };
-  const saveProfile = async (nextUser: User, fullName: string) => {
-    setUser(nextUser);
-    setProfileName(fullName || nextUser.user_metadata?.["full_name"] || nextUser.email?.split("@")[0] || "Explorador");
-    const { error } = await supabase.from("profiles").upsert({ user_id: nextUser.id, full_name: fullName || nextUser.user_metadata?.["full_name"] || "" }, { onConflict: "user_id" });
-    if (error) notify("Conta criada, mas o perfil não foi atualizado.");
-  };
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    go("welcome", true);
-  };
+  const onAuthed = (u: User) => { setUser(u); go("home"); };
+
+  const center = location ?? GOIANIA;
+  const main = screen === "home" || screen === "map" || screen === "saved" || screen === "profile";
 
   return (
-    <main className="min-h-dvh bg-primary/5 p-0 sm:grid sm:place-items-center sm:p-7">
-      <div className="relative h-dvh w-full overflow-hidden bg-background sm:h-[852px] sm:max-h-[calc(100vh-3.5rem)] sm:w-[393px] sm:rounded-[2.6rem] sm:border-[7px] sm:border-foreground sm:shadow-2xl">
-        <div key={screen} className={direction === "back" ? "animate-screen-back" : "animate-screen-in"}>
-          {screen === "welcome" && <WelcomeScreen onSignup={() => { setAuthMode("signup"); go("auth"); }} onLogin={() => { setAuthMode("login"); go("auth"); }} onExplore={() => go("home")} />}
-          {screen === "auth" && <AuthScreen initialMode={authMode} onBack={() => go("welcome", true)} onSuccess={(nextUser, name) => { void saveProfile(nextUser, name); go("home"); }} notify={notify} />}
-          {screen === "home" && <HomeScreen activeCategory={activeCategory} savedIds={savedIds} onCategory={setActiveCategory} onDetail={(place) => openDetail(place, "home")} onNavigate={(next) => go(next)} onSave={toggleSaved} onAdd={() => setModalOpen(true)} />}
-          {screen === "map" && <MapScreen active={activeCategory} onCategory={setActiveCategory} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "map")} />}
-          {screen === "detail" && <DetailScreen place={selectedPlace} communityEntries={diaryEntries.filter((entry) => entry.placeId === selectedPlace.id)} saved={savedIds.has(selectedPlace.id)} onBack={() => go(previousScreen, true)} onSave={() => toggleSaved(selectedPlace)} onGo={() => notify("Adicionado à sua lista")} onShare={() => notify("Link do lugar copiado!")} />}
-          {screen === "saved" && <SavedScreen savedPlaces={places.filter((place) => savedIds.has(place.id))} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onDetail={(place) => openDetail(place, "saved")} onSave={toggleSaved} />}
-          {screen === "profile" && <ProfileScreen name={profileName} email={user?.email ?? null} savedCount={savedIds.size} diaryEntries={diaryEntries} onNavigate={(next) => go(next)} onAdd={() => setModalOpen(true)} onSignOut={user ? signOut : () => go("auth")} />}
+    <main className="min-h-dvh bg-background">
+      <div className="relative mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
+        <div key={screen} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
+          {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
+          {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
+          {screen === "signup" && <SignupScreen onBack={() => go("welcome", true)} onLogin={() => go("login")} onDone={(u) => { if (u) setUser(u); go("signup-done"); }} notify={notify} />}
+          {screen === "signup-done" && <SignupDoneScreen confirmed={!!user} onContinue={() => go(user ? "home" : "login")} />}
+          {screen === "forgot" && <ForgotScreen onBack={() => go("login", true)} notify={notify} />}
+          {screen === "new-password" && <NewPasswordScreen onDone={() => go("home")} notify={notify} />}
+          {screen === "home" && <HomeScreen user={user} center={center} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} />}
+          {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
+          {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} notify={notify} />}
+          {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} />}
+          {screen === "profile" && <ProfileScreen user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} />}
         </div>
-        {modalOpen && <ExperienceModal initialPlace={selectedPlace} onClose={() => setModalOpen(false)} onPublish={publishExperience} />}
-        {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex -translate-x-1/2 animate-toast-in items-center gap-2 whitespace-nowrap rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-xl"><Check size={16} />{toast}</div>}
+        {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
+        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); notify("Experiência registrada!"); }} notify={notify} />}
+        {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
       </div>
     </main>
   );
 }
 
-function WelcomeScreen({ onSignup, onLogin, onExplore }: { onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
-  return <section className="relative h-dvh min-h-0 overflow-hidden bg-primary sm:h-full">
-    <img src={flamboyantReal.url} width={1080} height={1920} className="absolute inset-0 h-full w-full object-cover object-[center_40%]" alt="Parque Flamboyant e o skyline do Jardim Goiás, em Goiânia" />
-    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-background/90 via-background/55 to-transparent" />
-    <div className="absolute inset-x-0 bottom-0 h-[50%] bg-gradient-to-t from-primary via-primary/70 to-transparent" />
-    <StatusBar />
-    <div className="relative z-10 flex h-full flex-col items-center justify-between px-[7.5%] pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(4.5rem,calc(env(safe-area-inset-top)+3rem))] text-center">
-      <div className="flex flex-col items-center">
-        <div className="font-display text-[clamp(3rem,15vw,4rem)] font-black leading-none"><span className="text-primary">Cê</span> <span className="text-secondary">Vai<span className="inline-block rotate-6">?</span></span></div>
-        <p className="mt-4 max-w-[17rem] font-display text-lg font-extrabold leading-snug text-primary">O mapa das suas escolhas.</p>
-        <p className="mt-1 max-w-[17rem] text-sm font-semibold leading-relaxed text-foreground/80">Onde você foi e se vale a pena voltar.</p>
+function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNavigate: (s: MainScreen) => void; onAdd: () => void }) {
+  const item = (id: MainScreen, label: string, Icon: typeof Compass) => (
+    <button onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={`flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-bold ${active === id ? "text-primary" : "text-muted-foreground"}`}>
+      <Icon size={22} strokeWidth={active === id ? 2.6 : 2} />{label}
+    </button>
+  );
+  return <nav className="relative z-30 flex shrink-0 items-end border-t border-border bg-card px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+    {item("home", "Explorar", Compass)}{item("map", "Mapa", MapIcon)}
+    <div className="flex flex-1 justify-center"><button onClick={onAdd} aria-label="Registrar experiência" className="-mt-6 grid size-14 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg ring-4 ring-background transition-transform active:scale-95"><Plus size={28} strokeWidth={2.8} /></button></div>
+    {item("saved", "Salvos", Bookmark)}{item("profile", "Perfil", UserRound)}
+  </nav>;
+}
+
+/* ---------------- Onboarding & auth ---------------- */
+
+function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
+  return <section className="relative h-full min-h-dvh overflow-hidden bg-primary">
+    <img src={flamboyantReal.url} className="absolute inset-0 h-full w-full object-cover object-[center_40%]" alt="Parque Flamboyant e os prédios do Jardim Goiás, em Goiânia" />
+    <div className="absolute inset-0 bg-gradient-to-b from-primary/30 via-transparent to-primary" />
+    <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-primary via-primary/85 to-transparent" />
+    <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="inline-flex w-fit rounded-2xl bg-background/95 px-4 py-2 shadow-lg"><Logo size="md" /></div>
+      <h1 className="mt-5 font-display text-[1.9rem] font-black leading-tight text-primary-foreground">O mapa das suas escolhas.</h1>
+      <p className="mt-2 text-base font-semibold text-primary-foreground/85">Onde você foi e se vale a pena voltar.</p>
+      <div className="mt-8 space-y-3">
+        <Button disabled={!ready} onClick={onSignup} className="h-[52px] w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground shadow-lg hover:bg-secondary/90">Criar conta</Button>
+        <Button disabled={!ready} onClick={onLogin} variant="outline" className="h-[52px] w-full rounded-full border-2 border-primary-foreground/80 bg-transparent text-base font-extrabold text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">Entrar</Button>
+        <button onClick={onExplore} className="block w-full py-2 text-sm font-bold text-primary-foreground/85 underline underline-offset-4">Explorar sem entrar</button>
       </div>
-      <div className="w-full space-y-3">
-        <Button onClick={onSignup} className="h-[52px] w-full rounded-full bg-primary text-base font-bold text-primary-foreground shadow-xl ring-1 ring-primary-foreground/15">Criar conta</Button>
-        <Button onClick={onLogin} className="h-[52px] w-full rounded-full bg-card text-base font-bold text-primary shadow-xl hover:bg-card/90">Entrar</Button>
-        <button onClick={onExplore} className="block w-full pt-1 text-sm font-bold text-primary-foreground/85 underline-offset-4 hover:underline">Explorar sem entrar</button>
-        <p className="text-[9px] text-primary-foreground/50">Foto: Fronteira / Wikimedia Commons, CC BY-SA 4.0</p>
-      </div>
+      <p className="mt-1 text-center text-[9px] text-primary-foreground/45">Foto: Fronteira / Wikimedia Commons, CC BY-SA 4.0</p>
     </div>
   </section>;
 }
 
-function AuthScreen({ initialMode, onBack, onSuccess, notify }: { initialMode: "login" | "signup"; onBack: () => void; onSuccess: (user: User, name: string) => void; notify: (message: string) => void }) {
-  const [mode, setMode] = useState<"login" | "signup">(initialMode);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+function AuthLayout({ onBack, children }: { onBack: () => void; children: ReactNode }) {
+  return <section className="h-full overflow-y-auto bg-background px-6 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
+    <Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="-ml-2 rounded-full"><ArrowLeft /></Button>
+    <div className="mx-auto mt-6 max-w-sm"><Logo size="md" />{children}</div>
+  </section>;
+}
+
+function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return <label className="block"><span className="mb-1.5 block text-xs font-bold text-foreground/80">{label}</span><input {...props} className="h-12 w-full rounded-xl border border-input bg-card px-4 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>;
+}
+
+function PasswordField({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
+  const [show, setShow] = useState(false);
+  return <label className="block"><span className="mb-1.5 block text-xs font-bold text-foreground/80">{label}</span><div className="relative"><input value={value} onChange={(e) => onChange(e.target.value)} type={show ? "text" : "password"} autoComplete={autoComplete} className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /><button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Ocultar senha" : "Mostrar senha"} className="absolute right-3 top-3 text-muted-foreground">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div></label>;
+}
+
+function GoogleButton({ onSuccess, notify }: { onSuccess: (u: User) => void; notify: (m: string) => void }) {
+  return <>
+    <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div>
+    <Button variant="outline" onClick={async () => {
+      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (r.error) return notify("Não foi possível entrar com Google.");
+      if (r.redirected) return;
+      const { data } = await supabase.auth.getUser();
+      if (data.user) onSuccess(data.user);
+    }} className="h-12 w-full rounded-full border-border bg-card font-bold text-foreground"><span className="mr-2 font-black text-secondary">G</span>Continuar com Google</Button>
+  </>;
+}
+
+function LoginScreen({ onBack, onSignup, onForgot, onSuccess, notify }: { onBack: () => void; onSignup: () => void; onForgot: () => void; onSuccess: (u: User) => void; notify: (m: string) => void }) {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [loading, setLoading] = useState(false);
   const submit = async () => {
     setLoading(true);
-    if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, data: { full_name: fullName } } });
-      setLoading(false);
-      if (error) return notify(error.message);
-      if (!data.session) return notify("Confira seu e-mail para confirmar a conta.");
-      if (data.user) onSuccess(data.user, fullName);
-      return;
-    }
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (error) return notify("E-mail ou senha inválidos.");
-    onSuccess(data.user, data.user.user_metadata?.["full_name"] ?? "");
+    if (error) return notify(error.message.includes("confirm") ? "Confirme seu e-mail antes de entrar." : "E-mail ou senha incorretos.");
+    onSuccess(data.user);
   };
-  const googleSignIn = async (provider: "google" | "apple" = "google") => {
-    const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
-    if (result.error) notify(`Não foi possível entrar com ${provider === "google" ? "Google" : "Apple"}.`);
-    if (result.redirected) return;
-    const { data } = await supabase.auth.getUser();
-    if (data.user) onSuccess(data.user, data.user.user_metadata?.["full_name"] ?? "");
+  return <AuthLayout onBack={onBack}>
+    <h1 className="mt-8 font-display text-[1.75rem] font-black leading-tight">Que bom te ver por aqui.</h1>
+    <p className="mt-2 text-sm text-muted-foreground">Entre para continuar seu mapa de experiências.</p>
+    <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <Field label="E-mail" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <PasswordField label="Senha" value={password} onChange={setPassword} autoComplete="current-password" />
+      <button type="button" onClick={onForgot} className="text-sm font-bold text-primary">Esqueci minha senha</button>
+      <Button type="submit" disabled={loading || !email || password.length < 6} className="h-12 w-full rounded-full bg-primary text-base font-extrabold text-primary-foreground">{loading ? "Entrando…" : "Entrar"}</Button>
+    </form>
+    <GoogleButton onSuccess={onSuccess} notify={notify} />
+    <p className="mt-8 text-center text-sm text-muted-foreground">Ainda não tem conta? <button onClick={onSignup} className="font-extrabold text-secondary">Criar conta</button></p>
+  </AuthLayout>;
+}
+
+function SignupScreen({ onBack, onLogin, onDone, notify }: { onBack: () => void; onLogin: () => void; onDone: (u: User | null) => void; notify: (m: string) => void }) {
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [loading, setLoading] = useState(false);
+  const mismatch = confirm.length > 0 && confirm !== password;
+  const submit = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } } });
+    setLoading(false);
+    if (error) return notify(error.message.includes("registered") ? "Este e-mail já tem conta." : "Não foi possível criar a conta.");
+    if (data.session && data.user) await supabase.from("profiles").upsert({ user_id: data.user.id, full_name: name.trim() }, { onConflict: "user_id" });
+    onDone(data.session ? data.user : null);
   };
-  return <section className="h-dvh overflow-y-auto bg-background px-5 pb-8 pt-12 sm:h-[838px]"><StatusBar /><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full"><ArrowLeft /></Button><div className="mx-auto mt-4 max-w-sm"><Logo compact /><h1 className="mt-8 font-display text-3xl font-black">{mode === "login" ? "Bem-vindo de volta" : "Crie seu mapa"}</h1><p className="mt-2 text-sm text-muted-foreground">{mode === "login" ? "Entre para continuar suas descobertas." : "Guarde lugares, fotos e experiências em um só lugar."}</p><div className="mt-7 grid grid-cols-2 rounded-full bg-muted p-1"><Button onClick={() => setMode("login")} className={`rounded-full ${mode === "login" ? "bg-card text-primary shadow-sm hover:bg-card" : "bg-transparent text-muted-foreground shadow-none hover:bg-transparent"}`}>Entrar</Button><Button onClick={() => setMode("signup")} className={`rounded-full ${mode === "signup" ? "bg-card text-primary shadow-sm hover:bg-card" : "bg-transparent text-muted-foreground shadow-none hover:bg-transparent"}`}>Criar conta</Button></div><div className="mt-6 space-y-3">{mode === "signup" && <input value={fullName} onChange={(event) => setFullName(event.target.value)} aria-label="Nome completo" autoComplete="name" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Nome completo" />}<input value={email} onChange={(event) => setEmail(event.target.value)} aria-label="E-mail" autoComplete="email" type="email" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="E-mail" /><div className="relative"><input value={password} onChange={(event) => setPassword(event.target.value)} aria-label="Senha" autoComplete={mode === "login" ? "current-password" : "new-password"} type={showPassword ? "text" : "password"} className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-12 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Senha" /><Button variant="ghost" size="icon" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword((value) => !value)} className="absolute right-1 top-1 rounded-full text-muted-foreground">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</Button></div><Button disabled={loading || !email || password.length < 6 || (mode === "signup" && !fullName.trim())} onClick={() => void submit()} className="h-12 w-full rounded-full bg-primary text-primary-foreground">{loading ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}</Button></div><div className="my-5 flex items-center gap-3 text-[10px] text-muted-foreground"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div><Button variant="outline" onClick={() => void googleSignIn()} className="h-12 w-full rounded-full border-border bg-card text-foreground"><span className="mr-2 text-base font-black text-secondary">G</span>Continuar com Google</Button><Button onClick={() => void googleSignIn("apple")} className="mt-3 h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"><span className="mr-2 text-base"></span>Continuar com Apple</Button></div></section>;
+  return <AuthLayout onBack={onBack}>
+    <h1 className="mt-8 font-display text-[1.75rem] font-black leading-tight">Criar sua conta</h1>
+    <p className="mt-2 text-sm text-muted-foreground">Seu diário de lugares, só seu.</p>
+    <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <Field label="Nome" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Field label="E-mail" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <PasswordField label="Senha (mín. 6 caracteres)" value={password} onChange={setPassword} autoComplete="new-password" />
+      <PasswordField label="Confirmar senha" value={confirm} onChange={setConfirm} autoComplete="new-password" />
+      {mismatch && <p className="text-xs font-bold text-destructive">As senhas não conferem.</p>}
+      <Button type="submit" disabled={loading || !name.trim() || !email || password.length < 6 || confirm !== password} className="h-12 w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground hover:bg-secondary/90">{loading ? "Criando…" : "Criar conta"}</Button>
+    </form>
+    <p className="mt-8 text-center text-sm text-muted-foreground">Já tem conta? <button onClick={onLogin} className="font-extrabold text-primary">Entrar</button></p>
+  </AuthLayout>;
 }
 
-function HomeScreen({ activeCategory, savedIds, onCategory, onDetail, onNavigate, onSave, onAdd }: { activeCategory: Category; savedIds: Set<string>; onCategory: (category: Category) => void; onDetail: (place: Place) => void; onNavigate: (screen: MainScreen) => void; onSave: (place: Place) => void; onAdd: () => void }) {
-  const [query, setQuery] = useState("");
-  const visible = useMemo(() => places.filter((place) => (activeCategory === "Todos" || place.category === activeCategory) && place.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())), [activeCategory, query]);
-  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="flex items-center justify-between px-5"><Logo compact /><Bell size={21} className="text-primary" fill="currentColor" /></header><div className="mx-5 mt-4 flex h-11 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm"><Search size={17} className="text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" /><MoreHorizontal size={17} /></div>
-    <div className="mt-5 flex justify-between px-3">{categoryOptions.map(({ name, icon: Icon, tone }) => <Button variant="ghost" key={name} onClick={() => onCategory(activeCategory === name ? "Todos" : name)} className={`h-auto min-w-0 flex-col gap-1.5 rounded-xl px-1 py-1 text-[10px] font-bold ${activeCategory === name ? "text-primary" : "text-foreground"}`}><span className={`grid size-12 place-items-center rounded-full transition-transform ${tone} ${activeCategory === name ? "scale-110 ring-2 ring-primary ring-offset-2" : ""}`}><Icon size={21} /></span>{name}</Button>)}</div>
-    <div className="mt-7 flex items-center justify-between px-5"><h1 className="font-display text-xl font-black">{activeCategory === "Todos" ? "Destaques da semana" : activeCategory}</h1><Button variant="ghost" onClick={() => onCategory("Todos")} className="h-8 gap-1 px-1 text-xs text-primary">{activeCategory === "Todos" ? "Ver todos" : "Limpar"}<ChevronRight size={14} /></Button></div>
-    <div className="mx-5 mt-3 grid gap-3">{visible.length ? visible.map((place, index) => <PlaceCard key={place.id} place={place} featured={index === 0} saved={savedIds.has(place.id)} onOpen={() => onDetail(place)} onSave={() => onSave(place)} />) : <EmptyState title="Nenhum lugar encontrado" text="Tente outra categoria ou busca." />}</div>
-    <BottomNav active="home" onNavigate={onNavigate} onAdd={onAdd} />
+function SignupDoneScreen({ confirmed, onContinue }: { confirmed: boolean; onContinue: () => void }) {
+  return <section className="flex h-full flex-col items-center justify-center bg-primary px-8 text-center text-primary-foreground">
+    <div className="grid size-20 place-items-center rounded-full bg-secondary text-secondary-foreground"><Check size={40} strokeWidth={3} /></div>
+    <h1 className="mt-8 font-display text-3xl font-black leading-tight">Pronto! Agora vamos descobrir seus lugares.</h1>
+    {!confirmed && <p className="mt-4 text-sm text-primary-foreground/80">Enviamos um link para o seu e-mail. Confirme a conta e depois entre.</p>}
+    <Button onClick={onContinue} className="mt-10 h-12 w-full max-w-xs rounded-full bg-background font-extrabold text-primary hover:bg-background/90">{confirmed ? "Começar a explorar" : "Ir para o login"}</Button>
   </section>;
 }
 
-function PlaceCard({ place, featured, saved, onOpen, onSave }: { place: Place; featured?: boolean; saved: boolean; onOpen: () => void; onSave: () => void }) {
-  return <article className={`overflow-hidden rounded-2xl bg-card shadow-sm ${featured ? "shadow-md" : "grid grid-cols-[104px_1fr]"}`}><Button variant="ghost" aria-label={`Abrir ${place.name}`} onClick={onOpen} className={`relative block h-auto w-full overflow-hidden rounded-none p-0 ${featured ? "h-40" : "h-full min-h-28"}`}><img src={place.image} width={1200} height={704} loading="lazy" alt={place.name} className="h-full w-full object-cover" />{featured && <span className="absolute left-3 top-3 rounded-full bg-secondary px-2.5 py-1 text-[10px] font-bold text-secondary-foreground">Em alta</span>}</Button><div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-3"><Button variant="ghost" onClick={onOpen} className="h-auto min-w-0 justify-start whitespace-normal p-0 text-left hover:bg-transparent"><span className="min-w-0"><strong className="block truncate font-display text-sm font-extrabold">{place.name}</strong><span className="mt-1 flex items-center gap-1 text-[11px]"><Star size={12} className="fill-secondary text-secondary" /><b>{place.rating}</b><span className="truncate text-muted-foreground">• {place.area}</span></span></span></Button><Button variant="ghost" size="icon" aria-label={saved ? "Remover dos salvos" : "Salvar lugar"} onClick={onSave} className="rounded-full bg-muted text-secondary"><Heart size={19} fill={saved ? "currentColor" : "none"} /></Button></div></article>;
+function ForgotScreen({ onBack, notify }: { onBack: () => void; notify: (m: string) => void }) {
+  const [email, setEmail] = useState(""); const [sent, setSent] = useState(false);
+  return <AuthLayout onBack={onBack}>
+    <h1 className="mt-8 font-display text-[1.75rem] font-black">Esqueceu a senha?</h1>
+    <p className="mt-2 text-sm text-muted-foreground">{sent ? "Se houver conta com esse e-mail, você vai receber um link para criar uma nova senha." : "Digite seu e-mail e enviaremos um link para redefinir."}</p>
+    {!sent && <form className="mt-8 space-y-4" onSubmit={async (e) => { e.preventDefault(); const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin }); if (error) notify("Não foi possível enviar agora."); else setSent(true); }}>
+      <Field label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Button type="submit" disabled={!email} className="h-12 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Enviar link</Button>
+    </form>}
+  </AuthLayout>;
 }
 
-function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNavigate: (screen: MainScreen) => void; onAdd: () => void }) {
-  const items: Array<{ key: MainScreen; label: string; icon: typeof MapPin }> = [{ key: "home", label: "Explorar", icon: Compass }, { key: "map", label: "Mapa", icon: Map }, { key: "saved", label: "Salvos", icon: Bookmark }, { key: "profile", label: "Perfil", icon: UserRound }];
-  return <nav className="absolute inset-x-0 bottom-0 z-20 grid h-[78px] grid-cols-5 items-center border-t border-border bg-background/95 px-3 pb-2 backdrop-blur">{items.slice(0, 2).map(({ key, label, icon: Icon }) => <NavItem key={key} active={active === key} label={label} Icon={Icon} onClick={() => onNavigate(key)} />)}<Button aria-label="Registrar experiência" onClick={onAdd} className="mx-auto size-14 -translate-y-3 rounded-full bg-primary p-0 text-primary-foreground shadow-lg"><Plus className="size-7" /></Button>{items.slice(2).map(({ key, label, icon: Icon }) => <NavItem key={key} active={active === key} label={label} Icon={Icon} onClick={() => onNavigate(key)} />)}</nav>;
+function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m: string) => void }) {
+  const [password, setPassword] = useState("");
+  return <AuthLayout onBack={onDone}>
+    <h1 className="mt-8 font-display text-[1.75rem] font-black">Nova senha</h1>
+    <form className="mt-8 space-y-4" onSubmit={async (e) => { e.preventDefault(); const { error } = await supabase.auth.updateUser({ password }); if (error) return notify("Não foi possível alterar a senha."); notify("Senha alterada!"); onDone(); }}>
+      <PasswordField label="Nova senha" value={password} onChange={setPassword} autoComplete="new-password" />
+      <Button type="submit" disabled={password.length < 6} className="h-12 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Salvar senha</Button>
+    </form>
+  </AuthLayout>;
 }
 
-function NavItem({ active, label, Icon, onClick }: { active: boolean; label: string; Icon: typeof MapPin; onClick: () => void }) {
-  return <Button variant="ghost" onClick={onClick} aria-current={active ? "page" : undefined} className={`h-auto flex-col gap-1 rounded-xl px-1 py-1 text-[9px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}><Icon size={20} fill={active && label === "Salvos" ? "currentColor" : "none"} />{label}</Button>;
+/* ---------------- Shared pieces ---------------- */
+
+function usePlaces(user: User | null, center: LatLng, category: string | null, query: string) {
+  const search = useServerFn(searchPlaces);
+  const lat = Math.round(center.lat * 100) / 100; const lng = Math.round(center.lng * 100) / 100;
+  return useQuery({
+    queryKey: ["places", category, query, lat, lng],
+    queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng } }),
+    enabled: !!user,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
 }
 
-function MapScreen({ active, onCategory, onNavigate, onAdd, onDetail }: { active: Category; onCategory: (category: Category) => void; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void }) {
-  const visible = places.filter((place) => active === "Todos" || place.category === active);
-  const firstVisible = visible[0];
-  return <section className="relative h-dvh overflow-hidden bg-muted pt-12 sm:h-[838px]"><StatusBar /><div className="map-pattern absolute inset-0 opacity-70" /><div className="absolute left-[-20%] top-[47%] h-10 w-[150%] rotate-[-16deg] bg-sky-100/70" /><div className="relative z-10 mx-4 flex h-11 items-center gap-2 rounded-full bg-card px-4 shadow-lg"><Search size={17} /><input aria-label="Buscar nesta área" className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder="Buscar nesta área" /><Navigation size={17} className="text-primary" /></div><div className="relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">{(["Todos", ...categoryOptions.map((item) => item.name)] as Category[]).map((cat) => <Button key={cat} onClick={() => onCategory(cat)} className={`h-8 shrink-0 rounded-full px-3 text-[11px] ${active === cat ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm hover:bg-card"}`}>{cat}</Button>)}</div>
-    {visible.map((place) => { const category = categoryOptions.find((item) => item.name === place.category); const Icon = category?.icon ?? MapPin; return <Button key={place.id} aria-label={`Abrir ${place.name}`} onClick={() => onDetail(place)} style={{ left: place.x, top: place.y }} className="absolute z-10 h-auto -translate-x-1/2 flex-col gap-0 bg-transparent p-0 text-[10px] text-foreground shadow-none hover:bg-transparent"><span className={`grid size-10 place-items-center rounded-full border-2 border-background text-primary-foreground shadow-lg ${category?.tone ?? "bg-primary"}`}><Icon size={17} /></span><span className="mt-1 max-w-24 rounded bg-background/85 px-1.5 py-0.5 leading-tight backdrop-blur">{place.area}</span></Button>; })}
-    {firstVisible && <Button variant="ghost" onClick={() => onDetail(firstVisible)} className="absolute bottom-24 left-4 right-20 z-10 h-auto justify-start gap-3 rounded-2xl bg-card p-2 text-left shadow-lg hover:bg-card"><img src={firstVisible.image} alt="" className="size-14 rounded-xl object-cover" /><span className="min-w-0"><b className="block truncate text-xs">{firstVisible.name}</b><small className="text-muted-foreground">★ {firstVisible.rating} · {firstVisible.area}</small></span></Button>}<Button aria-label="Minha localização" className="absolute bottom-24 right-4 z-10 size-12 rounded-full bg-card p-0 text-primary shadow-lg hover:bg-card"><Navigation size={20} /></Button><BottomNav active="map" onNavigate={onNavigate} onAdd={onAdd} />
+function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares reais, ver fotos e registrar experiências." }: { onLogin: () => void; text?: string }) {
+  return <div className="mx-5 mt-6 rounded-2xl bg-primary p-6 text-primary-foreground">
+    <Lock size={22} className="text-secondary" />
+    <p className="mt-3 font-display text-lg font-black">Falta pouco para descobrir</p>
+    <p className="mt-1 text-sm text-primary-foreground/80">{text}</p>
+    <Button onClick={onLogin} className="mt-5 h-11 rounded-full bg-secondary px-6 font-extrabold text-secondary-foreground hover:bg-secondary/90">Entrar ou criar conta</Button>
+  </div>;
+}
+
+function CategoryChips({ value, onChange, withAll = false, className = "" }: { value: string | null; onChange: (c: string | null) => void; withAll?: boolean; className?: string }) {
+  return <div className={`flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] ${className}`}>
+    {withAll && <button onClick={() => onChange(null)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold shadow-sm ${value === null ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>Todos</button>}
+    {CATEGORIES.map((c) => <button key={c.name} onClick={() => onChange(value === c.name ? null : c.name)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-sm transition ${value === c.name ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}><span>{c.emoji}</span>{c.name}</button>)}
+  </div>;
+}
+
+function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
+  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
+}
+
+function Skeleton({ className }: { className: string }) { return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />; }
+
+function ErrorBox({ error }: { error: unknown }) {
+  return <div className="mx-5 mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error instanceof Error ? error.message : "Não foi possível carregar os lugares."}</div>;
+}
+
+/* ---------------- Explorar ---------------- */
+
+function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { user: User | null; center: LatLng; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void }) {
+  const [input, setInput] = useState(""); const [query, setQuery] = useState("");
+  useEffect(() => { const t = window.setTimeout(() => setQuery(input.trim()), 500); return () => window.clearTimeout(t); }, [input]);
+  const places = usePlaces(user, center, category, query);
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date()).toUpperCase();
+  const [first, ...rest] = places.data ?? [];
+  return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
+    <header className="flex items-start justify-between px-5">
+      <div><p className="text-[11px] font-extrabold tracking-[0.14em] text-secondary">{weekday}, GOIÂNIA</p><h1 className="mt-1 font-display text-[1.9rem] font-black leading-tight">Cê vai onde?</h1></div>
+      <Logo size="sm" />
+    </header>
+    <form onSubmit={(e) => { e.preventDefault(); setQuery(input.trim()); }} className="mx-5 mt-4 flex h-12 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm">
+      <Search size={18} className="text-muted-foreground" />
+      <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" />
+      {input && <button type="button" aria-label="Limpar busca" onClick={() => { setInput(""); setQuery(""); }}><X size={18} className="text-muted-foreground" /></button>}
+    </form>
+    <CategoryChips value={category} onChange={onCategory} className="mt-4" />
+    {!user ? <LoginPrompt onLogin={onLogin} /> : <>
+      <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${emojiOf(category)} ${category} perto de você` : "Destaques da cidade"}</h2></div>
+      {places.isError && <ErrorBox error={places.error} />}
+      {places.isLoading && <div className="mt-3 space-y-3 px-5"><Skeleton className="h-56" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>}
+      {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
+      {first && <button onClick={() => onOpen(first.id)} className="mx-5 mt-3 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left shadow-md">
+        <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
+        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-3 text-xs font-bold text-foreground/80">{first.rating && <span className="flex items-center gap-1"><Star size={13} className="fill-secondary text-secondary" />{first.rating.toFixed(1)} no Google</span>}<span>{formatKm(distanceKm(center, first))}</span></p></div>
+      </button>}
+      <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} onOpen={() => onOpen(p.id)} />)}</div>
+      {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
+    </>}
   </section>;
 }
 
-function DetailScreen({ place, communityEntries, saved, onBack, onSave, onGo, onShare }: { place: Place; communityEntries: DiaryEntry[]; saved: boolean; onBack: () => void; onSave: () => void; onGo: () => void; onShare: () => void }) {
-  const [tab, setTab] = useState("Sobre");
-  return <section className="h-dvh overflow-y-auto bg-background pb-24 sm:h-[838px]"><StatusBar light /><div className="relative h-64"><img src={place.image} width={1200} height={704} alt={place.name} className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-b from-foreground/30 to-transparent" /><div className="absolute left-4 right-4 top-12 flex justify-between"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full bg-background/90 text-foreground hover:bg-background"><ArrowLeft size={20} /></Button><div className="flex gap-2"><Button variant="ghost" size="icon" aria-label="Compartilhar" onClick={onShare} className="rounded-full bg-background/90 text-foreground hover:bg-background"><Share2 size={18} /></Button><Button variant="ghost" size="icon" aria-label="Mais opções" className="rounded-full bg-background/90 text-foreground hover:bg-background"><MoreHorizontal size={20} /></Button></div></div></div>
-    <div className="px-5 pt-5"><div className="flex items-start justify-between gap-3"><div><h1 className="font-display text-2xl font-black">{place.name}</h1><p className="mt-1 flex items-center gap-1 text-sm"><Star size={15} className="fill-secondary text-secondary" /><b>{place.rating}</b> ({place.reviews} avaliações)</p></div><Button variant="ghost" onClick={onGo} className="h-auto rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-primary hover:bg-emerald-50">Ver no mapa</Button></div><p className="mt-2 text-xs text-muted-foreground">{place.price} · {place.category.replace(/s$/, "")} · {place.area}</p></div>
-    <div className="mt-5 flex overflow-x-auto border-b border-border px-4 [scrollbar-width:none]">{["Sobre", "Avaliações", "Fotos Oficiais", "Fotos dos Usuários"].map((name) => <Button variant="ghost" key={name} onClick={() => setTab(name)} className={`h-11 shrink-0 rounded-none border-b-2 px-3 text-[11px] hover:bg-transparent ${tab === name ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}>{name}</Button>)}</div><DetailTab key={tab} tab={tab} place={place} communityEntries={communityEntries} />
-    <div className="absolute inset-x-0 bottom-0 z-20 grid h-[76px] grid-cols-[1fr_1.2fr] gap-3 border-t border-border bg-background px-4 py-3"><Button variant="outline" onClick={onSave} className="gap-2 rounded-full border-primary text-primary"><Bookmark size={18} fill={saved ? "currentColor" : "none"} />{saved ? "Salvo" : "Salvar"}</Button><Button onClick={onGo} className="gap-2 rounded-full bg-primary text-primary-foreground"><Check size={17} />Voltaria?</Button></div>
+function PlaceRow({ place, center, onOpen }: { place: PlaceSummary; center: LatLng; onOpen: () => void }) {
+  return <button onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left shadow-sm">
+    <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
+    <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex gap-3 text-[11px] font-bold text-foreground/70">{place.rating && <span className="flex items-center gap-1"><Star size={11} className="fill-secondary text-secondary" />{place.rating.toFixed(1)}</span>}<span>{formatKm(distanceKm(center, place))}</span></p></div>
+    <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
+  </button>;
+}
+
+/* ---------------- Mapa ---------------- */
+
+function MapScreen({ user, center, location, category, onCategory, onLocate, onOpen, onLogin }: { user: User | null; center: LatLng; location: LatLng | null; category: string | null; onCategory: (c: string | null) => void; onLocate: () => void; onOpen: (id: string) => void; onLogin: () => void }) {
+  const [input, setInput] = useState(""); const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const places = usePlaces(user, center, category, query);
+  const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: p.name })), [places.data]);
+  const current = places.data?.find((p) => p.id === selected) ?? null;
+  return <section className="relative h-full">
+    <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} className="absolute inset-0" />
+    <div className="absolute inset-x-0 top-0 z-10 space-y-3 bg-gradient-to-b from-background/90 to-transparent pb-6 pt-[max(1rem,env(safe-area-inset-top))]">
+      <form onSubmit={(e) => { e.preventDefault(); setSelected(null); setQuery(input.trim()); }} className="mx-5 flex h-12 items-center gap-3 rounded-full bg-card px-4 shadow-lg">
+        <Search size={18} className="text-muted-foreground" />
+        <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar no mapa" placeholder="Buscar lugar no mapa" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none" />
+        {query && <button type="button" aria-label="Limpar" onClick={() => { setInput(""); setQuery(""); }}><X size={18} /></button>}
+      </form>
+      <CategoryChips value={category} onChange={(c) => { setSelected(null); onCategory(c); }} withAll />
+    </div>
+    <button onClick={onLocate} aria-label="Minha localização" className="absolute right-4 z-10 grid size-12 place-items-center rounded-full bg-card text-primary shadow-lg" style={{ bottom: current ? "13.5rem" : "1.25rem" }}><Crosshair size={22} /></button>
+    {!user && <div className="absolute inset-x-0 bottom-4 z-10"><LoginPrompt onLogin={onLogin} text="Entre para ver lugares reais perto de você no mapa." /></div>}
+    {user && places.isLoading && <div className="absolute bottom-5 left-1/2 z-10 -translate-x-1/2 rounded-full bg-card px-4 py-2 text-sm font-bold shadow-lg">Buscando lugares…</div>}
+    {user && places.isError && <div className="absolute inset-x-0 bottom-4 z-10"><ErrorBox error={places.error} /></div>}
+    {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
+      <div className="flex gap-3 p-3">
+        <PlacePhoto src={current.photoUrl} alt={current.name} className="size-24 shrink-0 rounded-xl" />
+        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: CATEGORY_COLORS[current.category] }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))}{current.rating ? ` · ★ ${current.rating.toFixed(1)}` : ""}</p></div>
+        <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
+      </div>
+      <div className="px-3 pb-3"><Button onClick={() => onOpen(current.id)} className="h-11 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Ver lugar</Button></div>
+    </div>}
   </section>;
 }
 
-function DetailTab({ tab, place, communityEntries }: { tab: string; place: Place; communityEntries: DiaryEntry[] }) {
-  const communityPhotos = communityEntries.filter((entry) => entry.photo);
-  return <div className="animate-tab-in px-5 py-5">{tab === "Sobre" && <><p className="text-sm leading-relaxed">{place.description}</p><div className="mt-5 rounded-2xl bg-card p-4 shadow-sm"><b className="text-sm">Informações</b><p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><MapPin size={15} />{place.area}, Goiânia</p><p className="mt-2 text-[10px] text-muted-foreground">Dados simulados no formato Google Places · ID {place.googlePlaceId}</p></div></>}{tab === "Avaliações" && <><h2 className="font-display text-base font-black">O que estão dizendo</h2><div className="mt-3 flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><div className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary/20 font-black text-secondary">M</div><div><p className="text-xs font-bold">Mariana S.</p><p className="mt-1 text-xs text-secondary">★★★★★ <span className="text-muted-foreground">há 3 dias</span></p><p className="mt-2 text-xs">Experiência incrível e ambiente muito agradável!</p></div></div></>}{tab === "Fotos Oficiais" && <div><div className="flex items-center justify-between"><h2 className="font-display text-base font-black">Fotos Oficiais</h2><span className="rounded-full bg-muted px-2 py-1 text-[9px] font-bold text-muted-foreground">Google</span></div><div className="mt-3 grid grid-cols-2 gap-2">{place.officialPhotos.map((photo, index) => <img key={photo} src={photo} loading="lazy" width={1200} height={800} alt={`Foto oficial ${index + 1} de ${place.name}`} className={`${index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-square"} w-full rounded-xl object-cover`} />)}</div></div>}{tab === "Fotos dos Usuários" && (communityPhotos.length ? <div className="grid grid-cols-2 gap-2">{communityPhotos.map((entry) => <figure key={entry.id} className="overflow-hidden rounded-xl bg-card"><img src={entry.photo ?? ""} alt={`Registro da comunidade em ${place.name}`} className="aspect-square w-full object-cover" /><figcaption className="p-2 text-[10px] text-muted-foreground">Seu diário · {entry.rating} ★</figcaption></figure>)}</div> : <p className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-muted-foreground">As fotos registradas pelos usuários aparecem aqui.</p>)}</div>;
+/* ---------------- Data: experiences & saved ---------------- */
+
+async function loadExperiences(filter: { userId?: string; placeId?: string }): Promise<Experience[]> {
+  let q = supabase.from("experiences").select("id, place_id, category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
+  if (filter.userId) q = q.eq("user_id", filter.userId);
+  if (filter.placeId) q = q.eq("place_id", filter.placeId);
+  const { data, error } = await q;
+  if (error) throw error;
+  const paths = (data ?? []).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path));
+  const urls: Record<string, string> = {};
+  if (paths.length) {
+    const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
+    signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
+  }
+  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u) }));
 }
 
-function Tip({ initials, text }: { initials: string; text: string }) { return <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">{initials}</span><p className="pt-1 text-sm">{text}</p></div>; }
-
-function SavedScreen({ savedPlaces, onNavigate, onAdd, onDetail, onSave }: { savedPlaces: Place[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onDetail: (place: Place) => void; onSave: (place: Place) => void }) {
-  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="px-5"><Logo compact /><h1 className="mt-6 font-display text-2xl font-black">Seus lugares salvos</h1><p className="mt-1 text-sm text-muted-foreground">Volte quando quiser aos seus favoritos.</p></header><div className="mx-5 mt-5 grid gap-3">{savedPlaces.length ? savedPlaces.map((place) => <PlaceCard key={place.id} place={place} saved onOpen={() => onDetail(place)} onSave={() => onSave(place)} />) : <EmptyState title="Nada salvo ainda" text="Toque no coração de um lugar para encontrá-lo aqui." />}</div><BottomNav active="saved" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+function useSaved(user: User | null) {
+  return useQuery({
+    queryKey: ["saved", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("saved_places").select("place_id, list, created_at, place:places(name, address, category, photo_url, lat, lng)").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 }
 
-function ProfileScreen({ name, email, savedCount, diaryEntries, onNavigate, onAdd, onSignOut }: { name: string; email: string | null; savedCount: number; diaryEntries: DiaryEntry[]; onNavigate: (screen: MainScreen) => void; onAdd: () => void; onSignOut: () => void }) {
-  const initial = name.trim().charAt(0).toLocaleUpperCase() || "C";
-  return <section className="h-dvh overflow-y-auto pb-24 pt-12 sm:h-[838px]"><StatusBar /><header className="grid grid-cols-[minmax(0,1fr)_auto] items-center px-5"><Logo compact /><Button variant="ghost" size="icon" aria-label={email ? "Sair" : "Entrar"} onClick={onSignOut} className="shrink-0 rounded-full text-primary"><LogOut size={19} /></Button></header><div className="mt-5 flex flex-col items-center px-5 text-center"><div className="grid size-20 place-items-center rounded-full bg-primary text-2xl font-black text-primary-foreground">{initial}</div><h1 className="mt-3 max-w-full truncate font-display text-xl font-black">{name}</h1><p className="text-xs text-muted-foreground">{email ?? "Explorador de Goiânia"}</p><div className="mt-5 grid w-full grid-cols-3 divide-x divide-border rounded-2xl bg-card p-4 shadow-sm"><ProfileStat value={String(diaryEntries.length)} label="Registros" /><ProfileStat value={String(savedCount)} label="Salvos" /><ProfileStat value={String(diaryEntries.filter((entry) => entry.review).length)} label="Dicas" /></div></div><div className="mt-6 px-5"><div className="flex items-end justify-between"><h2 className="font-display text-lg font-black">Meu diário</h2><span className="text-[10px] text-muted-foreground">Só neste aparelho</span></div>{diaryEntries.length ? <div className="mt-3 grid gap-3">{diaryEntries.map((entry) => <article key={entry.id} className="grid grid-cols-[88px_1fr] overflow-hidden rounded-2xl bg-card shadow-sm">{entry.photo ? <img src={entry.photo} alt={`Experiência em ${entry.placeName}`} className="h-full min-h-24 w-full object-cover" /> : <div className="grid min-h-24 place-items-center bg-muted"><Camera className="text-muted-foreground" /></div>}<div className="min-w-0 p-3"><b className="block truncate text-sm">{entry.placeName}</b><p className="mt-1 text-[11px] text-secondary">{"★".repeat(entry.rating)}<span className="text-muted-foreground"> · {entry.wouldReturn ? "Voltaria" : "Não voltaria"}</span></p><p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{entry.review || entry.location}</p></div></article>)}</div> : <EmptyState title="Seu diário está vazio" text="Registre uma experiência pelo botão +." />}</div><BottomNav active="profile" onNavigate={onNavigate} onAdd={onAdd} /></section>;
+/* ---------------- Página do lugar ---------------- */
+
+function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { placeId: string; user: User | null; center: LatLng; onBack: () => void; onRegister: (p: PlaceSummary) => void; notify: (m: string) => void }) {
+  const details = useServerFn(getPlaceDetails);
+  const queryClient = useQueryClient();
+  const place = useQuery({ queryKey: ["place", placeId], queryFn: () => details({ data: { placeId } }), enabled: !!user, staleTime: 30 * 60 * 1000, retry: false });
+  const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }), enabled: !!user });
+  const saved = useSaved(user);
+  const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos">("Sobre");
+  const lists = new Set((saved.data ?? []).filter((s) => s.place_id === placeId).map((s) => s.list as SavedList));
+
+  const toggle = async (list: SavedList) => {
+    if (!user) return;
+    if (lists.has(list)) await supabase.from("saved_places").delete().match({ user_id: user.id, place_id: placeId, list });
+    else await supabase.from("saved_places").insert({ user_id: user.id, place_id: placeId, list });
+    notify(lists.has(list) ? `Removido de “${LIST_LABELS[list]}”` : `Adicionado a “${LIST_LABELS[list]}”`);
+    void queryClient.invalidateQueries({ queryKey: ["saved"] });
+  };
+
+  const p = place.data;
+  return <section className="flex h-full flex-col">
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative h-72 bg-muted">
+        {p ? <PlacePhoto src={p.photoUrl} alt={p.name} className="h-full w-full" /> : <Skeleton className="h-full rounded-none" />}
+        <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-transparent to-foreground/20" />
+        <button onClick={onBack} aria-label="Voltar" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><ArrowLeft size={20} /></button>
+        {p && <div className="absolute inset-x-5 bottom-4 text-primary-foreground"><p className="text-xs font-extrabold uppercase tracking-wider text-secondary">{emojiOf(p.category)} {p.typeLabel || p.category}</p><h1 className="mt-1 font-display text-[1.7rem] font-black leading-tight">{p.name}</h1></div>}
+      </div>
+      {!user && <LoginPrompt onLogin={onBack} />}
+      {place.isError && <ErrorBox error={place.error} />}
+      {p && <>
+        <div className="px-5 pt-4">
+          <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin size={16} className="mt-0.5 shrink-0 text-secondary" />{p.address}</p>
+          <p className="mt-2 flex gap-4 text-xs font-bold text-muted-foreground">{p.rating && <span>★ {p.rating.toFixed(1)} no Google ({p.ratingCount})</span>}<span>{formatKm(distanceKm(center, p))} de você</span></p>
+        </div>
+        <div className="sticky top-0 z-10 mt-4 flex border-b border-border bg-background px-5">
+          {(["Sobre", "Experiências", "Fotos"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`flex-1 border-b-2 py-3 text-sm font-extrabold ${tab === t ? "border-secondary text-primary" : "border-transparent text-muted-foreground"}`}>{t}</button>)}
+        </div>
+        <div key={tab} className="animate-tab-in px-5 py-5">
+          {tab === "Sobre" && <div className="space-y-4 text-sm">
+            {p.summary && <p className="leading-relaxed text-foreground/85">{p.summary}</p>}
+            {p.hours.length > 0 && <div className="rounded-2xl bg-card p-4 shadow-sm"><p className="mb-2 flex items-center gap-2 font-extrabold"><Clock size={16} />Horários</p>{p.hours.map((h) => <p key={h} className="text-xs leading-6 text-muted-foreground">{h}</p>)}</div>}
+            <div className="flex flex-wrap gap-2">
+              {p.phone && <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-xs font-bold shadow-sm"><Phone size={14} />{p.phone}</a>}
+              {p.website && <a href={p.website} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-xs font-bold shadow-sm"><ExternalLink size={14} />Site</a>}
+              {p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-xs font-bold shadow-sm"><Navigation size={14} />Como chegar</a>}
+            </div>
+            <p className="text-[10px] text-muted-foreground">Informações do Google Maps.</p>
+          </div>}
+          {tab === "Experiências" && <div>
+            <h2 className="font-display text-lg font-black">Experiências no Cê Vai?</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Suas experiências são privadas. Aqui aparecem as suas e as que outras pessoas escolheram compartilhar.</p>
+            <div className="mt-4 space-y-3">
+              {experiences.data?.length ? experiences.data.map((e) => <ExperienceCard key={e.id} exp={e} own={e.user_id === user?.id} />) : <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência.</div>}
+            </div>
+          </div>}
+          {tab === "Fotos" && <div>
+            <div className="flex items-center justify-between"><h2 className="font-display text-lg font-black">Fotos do local</h2><span className="rounded-full bg-muted px-2.5 py-1 text-[10px] font-extrabold text-muted-foreground">Google Places</span></div>
+            {p.photos.length ? <div className="mt-3 grid grid-cols-2 gap-2">{p.photos.map((ph, i) => <figure key={ph.url} className={`relative overflow-hidden rounded-xl ${i === 0 ? "col-span-2 h-52" : "h-32"}`}><img src={ph.url} alt={`${p.name} — foto ${i + 1}`} loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />{ph.attribution && <figcaption className="absolute bottom-1 left-2 text-[9px] font-semibold text-primary-foreground drop-shadow">{ph.attribution}</figcaption>}</figure>)}</div> : <p className="mt-3 text-sm text-muted-foreground">O Google não tem fotos deste lugar.</p>}
+            <p className="mt-6 text-xs text-muted-foreground">Fotos enviadas por usuários ficam na aba Experiências, separadas das fotos do Google.</p>
+          </div>}
+        </div>
+      </>}
+    </div>
+    {p && user && <div className="flex shrink-0 gap-2 border-t border-border bg-card px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+      <Button variant="outline" onClick={() => void toggle("quero_conhecer")} className={`h-12 flex-1 rounded-full font-extrabold ${lists.has("quero_conhecer") ? "border-primary bg-primary/10 text-primary" : ""}`}><Bookmark size={18} className={lists.has("quero_conhecer") ? "fill-current" : ""} />Quero ir</Button>
+      <Button variant="outline" size="icon" aria-label="Favoritar" onClick={() => void toggle("favoritos")} className={`size-12 rounded-full ${lists.has("favoritos") ? "border-secondary text-secondary" : ""}`}><Heart size={20} className={lists.has("favoritos") ? "fill-current" : ""} /></Button>
+      <Button onClick={() => onRegister(p)} className="h-12 flex-[1.3] rounded-full bg-secondary font-extrabold text-secondary-foreground hover:bg-secondary/90"><Plus size={18} />Eu fui</Button>
+    </div>}
+  </section>;
 }
 
-function ProfileStat({ value, label }: { value: string; label: string }) { return <div><b className="block font-display text-xl text-primary">{value}</b><small className="text-muted-foreground">{label}</small></div>; }
-function EmptyState({ title, text }: { title: string; text: string }) { return <div className="rounded-2xl border border-dashed border-border px-6 py-12 text-center"><Heart className="mx-auto text-muted-foreground" /><b className="mt-3 block text-sm">{title}</b><p className="mt-1 text-xs text-muted-foreground">{text}</p></div>; }
+function Stars({ value, size = 14 }: { value: number; size?: number }) {
+  return <span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <Star key={n} size={size} className={n <= value ? "fill-secondary text-secondary" : "text-border"} />)}</span>;
+}
 
-function ExperienceModal({ initialPlace, onClose, onPublish }: { initialPlace: Place; onClose: () => void; onPublish: (draft: ExperienceDraft) => void }) {
-  const [category, setCategory] = useState<Exclude<Category, "Todos">>(initialPlace.category);
-  const [wouldReturn, setWouldReturn] = useState(true);
-  const [review, setReview] = useState("");
-  const [placeName, setPlaceName] = useState(initialPlace.name);
-  const [location, setLocation] = useState(initialPlace.area);
+function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experience; own: boolean; showPlace?: boolean; onOpen?: () => void }) {
+  const date = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(exp.created_at));
+  return <article className="overflow-hidden rounded-2xl bg-card shadow-sm">
+    {exp.photos.length > 0 && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
+    <div className="p-4">
+      {showPlace && <button onClick={onOpen} className="mb-1 font-display text-base font-black text-left">{exp.place?.name ?? "Lugar"}</button>}
+      <div className="flex items-center justify-between"><Stars value={exp.rating} /><span className="text-[11px] font-bold text-muted-foreground">{own ? "Você" : "Comunidade"} · {date}</span></div>
+      {exp.comment && <p className="mt-2 text-sm leading-relaxed text-foreground/85">{exp.comment}</p>}
+      {exp.scores.length > 0 && <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">{exp.scores.map((s) => <p key={s.criterion} className="flex justify-between text-[11px] text-muted-foreground"><span>{s.criterion}</span><span className="font-extrabold text-foreground">{s.score}/5</span></p>)}</div>}
+      <div className="mt-3 flex gap-2 text-[11px] font-extrabold"><span className={`rounded-full px-2.5 py-1 ${exp.would_return ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{exp.would_return ? "❤️ Voltaria" : "Não voltaria"}</span>{own && <span className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-muted-foreground"><Lock size={10} />{exp.is_public ? "Compartilhada" : "Privada"}</span>}</div>
+    </div>
+  </article>;
+}
+
+/* ---------------- Salvos ---------------- */
+
+function SavedScreen({ user, onOpen, onLogin }: { user: User | null; onOpen: (id: string) => void; onLogin: () => void }) {
+  const saved = useSaved(user);
+  const [list, setList] = useState<SavedList>("quero_conhecer");
+  const items = (saved.data ?? []).filter((s) => s.list === list);
+  return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
+    <h1 className="px-5 font-display text-[1.75rem] font-black">Seus lugares salvos</h1>
+    {!user ? <LoginPrompt onLogin={onLogin} text="Entre para guardar lugares que quer conhecer e seus favoritos." /> : <>
+      <div className="mt-4 flex gap-2 px-5">{(Object.keys(LIST_LABELS) as SavedList[]).map((l) => <button key={l} onClick={() => setList(l)} className={`rounded-full px-4 py-2 text-sm font-bold ${list === l ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm"}`}>{LIST_LABELS[l]}</button>)}</div>
+      <div className="mt-5 grid grid-cols-2 gap-3 px-5">
+        {items.map((s) => <button key={s.place_id} onClick={() => onOpen(s.place_id)} className="overflow-hidden rounded-2xl bg-card text-left shadow-sm"><PlacePhoto src={s.place?.photo_url ?? null} alt={s.place?.name ?? ""} className="h-28 w-full" /><div className="p-3"><p className="text-[10px] font-extrabold text-secondary">{emojiOf(s.place?.category ?? "")} {s.place?.category}</p><p className="line-clamp-2 font-display text-sm font-black">{s.place?.name}</p></div></button>)}
+      </div>
+      {!saved.isLoading && items.length === 0 && <p className="mx-5 mt-2 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list === "ja_fui" ? "Registre uma experiência e o lugar aparece aqui." : "Nada por aqui ainda. Abra um lugar e toque em Quero ir ou no coração."}</p>}
+    </>}
+  </section>;
+}
+
+/* ---------------- Perfil ---------------- */
+
+function ProfileScreen({ user, name, onOpen, onLogin, onSignOut }: { user: User | null; name: string; onOpen: (id: string) => void; onLogin: () => void; onSignOut: () => void }) {
+  const exps = useQuery({ queryKey: ["experiences", "mine", user?.id], queryFn: () => loadExperiences({ userId: user!.id }), enabled: !!user });
+  const saved = useSaved(user);
+  const [view, setView] = useState<"lista" | "mapa" | "fotos">("lista");
+  const list = exps.data ?? [];
+  const visited = new Set(list.map((e) => e.place_id)).size;
+  const photos = list.flatMap((e) => e.photos);
+  const markers = useMemo<MapMarker[]>(() => {
+    const seen = new Set<string>();
+    return list.filter((e) => e.place?.lat != null && !seen.has(e.place_id) && seen.add(e.place_id)).map((e) => ({ id: e.place_id, lat: e.place!.lat!, lng: e.place!.lng!, category: e.category, label: e.place!.name }));
+  }, [list]);
+  if (!user) return <section className="h-full overflow-y-auto pt-[max(1.25rem,env(safe-area-inset-top))]"><h1 className="px-5 font-display text-[1.75rem] font-black">Perfil</h1><LoginPrompt onLogin={onLogin} text="Entre para ver suas experiências, fotos e o mapa dos lugares onde você foi." /></section>;
+  return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
+    <div className="flex items-center justify-between px-5"><Logo size="sm" /><Button variant="ghost" size="icon" aria-label="Sair" onClick={onSignOut} className="rounded-full"><LogOut size={20} /></Button></div>
+    <div className="mt-5 flex items-center gap-4 px-5">
+      <div className="grid size-20 place-items-center rounded-full bg-primary font-display text-3xl font-black text-primary-foreground ring-4 ring-secondary/30">{(name || "?").charAt(0).toUpperCase()}</div>
+      <div className="min-w-0"><h1 className="truncate font-display text-2xl font-black">{name || "Explorador"}</h1><p className="truncate text-sm text-muted-foreground">{user.email}</p></div>
+    </div>
+    <div className="mx-5 mt-5 grid grid-cols-3 rounded-2xl bg-card py-4 text-center shadow-sm">
+      <div><p className="font-display text-2xl font-black text-primary">{visited}</p><p className="text-[11px] font-bold text-muted-foreground">lugares visitados</p></div>
+      <div className="border-x border-border"><p className="font-display text-2xl font-black text-primary">{photos.length}</p><p className="text-[11px] font-bold text-muted-foreground">minhas fotos</p></div>
+      <div><p className="font-display text-2xl font-black text-primary">{saved.data?.length ?? 0}</p><p className="text-[11px] font-bold text-muted-foreground">salvos</p></div>
+    </div>
+    <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">Minhas experiências</h2></div>
+    <div className="mt-3 flex gap-2 px-5">{([["lista", "Lista"], ["mapa", "Mapa"], ["fotos", "Fotos"]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} className={`rounded-full px-4 py-2 text-sm font-bold ${view === k ? "bg-primary text-primary-foreground" : "bg-card shadow-sm"}`}>{l}</button>)}</div>
+    <div key={view} className="mt-4 animate-tab-in px-5">
+      {view === "lista" && (list.length ? <div className="space-y-3">{list.map((e) => <ExperienceCard key={e.id} exp={e} own showPlace onOpen={() => onOpen(e.place_id)} />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Você ainda não registrou nenhuma experiência. Toque no + para começar.</p>)}
+      {view === "mapa" && <MapView center={GOIANIA} markers={markers} onSelect={onOpen} className="h-80 overflow-hidden rounded-2xl" />}
+      {view === "fotos" && (photos.length ? <div className="grid grid-cols-3 gap-1.5">{photos.map((u) => <img key={u} src={u} alt="Minha foto" className="aspect-square w-full rounded-lg object-cover" />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Fotos das suas experiências aparecem aqui.</p>)}
+    </div>
+  </section>;
+}
+
+/* ---------------- Registrar experiência ---------------- */
+
+function ExperienceModal({ user, center, location, initialPlace, onLocate, onClose, onSaved, notify }: { user: User; center: LatLng; location: LatLng | null; initialPlace: PlaceSummary | null; onLocate: () => void; onClose: () => void; onSaved: () => void; notify: (m: string) => void }) {
+  const [step, setStep] = useState<"where" | "how">(initialPlace ? "how" : "where");
+  const [mode, setMode] = useState<"near" | "search" | "map">("near");
+  const [input, setInput] = useState(""); const [query, setQuery] = useState("");
+  const [place, setPlace] = useState<PlaceSummary | null>(initialPlace);
+  const [mapSel, setMapSel] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
-  const [photo, setPhoto] = useState<string | null>(null);
-  const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setPhoto(typeof reader.result === "string" ? reader.result : null); reader.readAsDataURL(file); };
-  return <div className="absolute inset-0 z-40 flex items-end bg-foreground/35 sm:items-center"><section role="dialog" aria-modal="true" aria-label="Registrar experiência" className="animate-modal-in flex h-[94%] w-full flex-col overflow-hidden rounded-t-[2rem] bg-background sm:h-full sm:rounded-none"><header className="grid h-16 shrink-0 grid-cols-[40px_1fr_40px] items-center border-b border-border px-4"><Button variant="ghost" size="icon" aria-label="Fechar" onClick={onClose} className="rounded-full"><X size={22} /></Button><h1 className="text-center font-display text-base font-black">Registrar experiência</h1></header><div className="flex-1 overflow-y-auto px-5 py-4">
-    <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none]">{categoryOptions.map(({ name, icon: Icon, tone }) => <Button variant="ghost" key={name} onClick={() => setCategory(name)} className={`h-auto flex-col gap-1 rounded-2xl px-3 py-2 text-[9px] ${category === name ? "ring-2 ring-secondary" : ""}`}><span className={`grid size-10 place-items-center rounded-full ${tone}`}><Icon size={18} /></span>{name}</Button>)}</div>
-    <label className="relative mt-3 grid h-28 cursor-pointer place-items-center overflow-hidden rounded-2xl border border-dashed border-border bg-card text-center"><input onChange={handlePhoto} type="file" accept="image/*" className="sr-only" />{photo ? <><img src={photo} alt="Prévia da foto selecionada" className="h-full w-full object-cover" /><span className="absolute rounded-full bg-background/90 px-3 py-1 text-[10px] font-bold">Trocar foto</span></> : <span><span className="mx-auto grid size-9 place-items-center rounded-full bg-background shadow"><Camera size={18} /></span><b className="mt-2 block text-xs">Adicionar foto</b><small className="text-muted-foreground">Escolha uma imagem</small></span>}</label>
-    <div className="mt-4 space-y-3"><input value={placeName} onChange={(event) => setPlaceName(event.target.value)} aria-label="Nome do lugar" className="h-12 w-full rounded-xl border border-input bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Qual é o nome do lugar?" /><div className="relative"><input value={location} onChange={(event) => setLocation(event.target.value)} aria-label="Localização" className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-10 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Onde fica?" /><MapPin className="absolute right-4 top-4 text-muted-foreground" size={17} /></div><div className="relative"><textarea aria-label="Sua experiência" value={review} onChange={(event) => setReview(event.target.value.slice(0, 500))} className="h-28 w-full resize-none rounded-xl border border-input bg-card p-4 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Conte sua experiência..." /><span className="absolute bottom-3 right-3 text-[10px] text-muted-foreground">{review.length}/500</span></div></div>
-    <div className="mt-5 flex items-center justify-between border-b border-border pb-5"><b className="text-sm">Como foi?</b><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <Button variant="ghost" size="icon" aria-label={`${n} estrelas`} key={n} onClick={() => setRating(n)} className={`size-7 p-0 ${n <= rating ? "text-secondary" : "text-muted-foreground"}`}><Star size={21} fill={n <= rating ? "currentColor" : "none"} /></Button>)}</div></div><div className="flex items-center justify-between py-5"><div><b className="text-sm">Voltaria?</b><p className="text-[11px] text-muted-foreground">Você voltaria a este lugar?</p></div><Button role="switch" aria-checked={wouldReturn} aria-label="Voltaria" onClick={() => setWouldReturn((value) => !value)} className={`h-7 w-12 justify-start rounded-full p-1 ${wouldReturn ? "bg-primary" : "bg-muted"}`}><span className={`size-5 rounded-full bg-background shadow transition-transform ${wouldReturn ? "translate-x-5" : "translate-x-0"}`} /></Button></div>
-  </div><div className="shrink-0 border-t border-border p-4"><Button disabled={!placeName.trim() || !location.trim()} onClick={() => onPublish({ placeName: placeName.trim(), location: location.trim(), category, review, rating, wouldReturn, photo })} className="h-12 w-full rounded-full bg-primary text-primary-foreground">Salvar no diário</Button></div></section></div>;
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [comment, setComment] = useState("");
+  const [wouldReturn, setWouldReturn] = useState(true);
+  const [files, setFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+
+  const results = usePlaces(user, center, null, mode === "search" ? query : "");
+  const markers = useMemo<MapMarker[]>(() => (results.data ?? []).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: p.name })), [results.data]);
+
+  const pick = (p: PlaceSummary) => { setPlace(p); setScores({}); setStep("how"); };
+  const addFiles = (e: ChangeEvent<HTMLInputElement>) => { const picked = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/") && f.size <= 10 * 1024 * 1024); setFiles((cur) => [...cur, ...picked].slice(0, 5)); e.target.value = ""; };
+
+  const submit = async () => {
+    if (!place || !rating) return;
+    setSaving(true);
+    try {
+      await supabase.from("places").upsert({ google_place_id: place.id, name: place.name, address: place.address, category: place.category, lat: place.lat, lng: place.lng, photo_url: place.photoUrl }, { onConflict: "google_place_id" });
+      const { data: exp, error } = await supabase.from("experiences").insert({ user_id: user.id, place_id: place.id, category: place.category, rating, comment: comment.trim() || null, would_return: wouldReturn }).select("id").single();
+      if (error || !exp) throw error ?? new Error("insert");
+      const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
+      if (scoreRows.length) await supabase.from("experience_scores").insert(scoreRows);
+      for (const [i, f] of files.entries()) {
+        const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const path = `${user.id}/${exp.id}/${Date.now()}-${i}.${ext}`;
+        const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
+        if (!up.error) await supabase.from("experience_photos").insert({ experience_id: exp.id, user_id: user.id, storage_path: path });
+      }
+      await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
+      onSaved();
+    } catch {
+      notify("Não foi possível registrar. Tente de novo.");
+    } finally { setSaving(false); }
+  };
+
+  return <div className="absolute inset-0 z-40 flex items-end bg-foreground/40" onClick={onClose}>
+    <div className="flex max-h-[94%] w-full animate-modal-in flex-col rounded-t-[1.75rem] bg-background" onClick={(e) => e.stopPropagation()}>
+      <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
+        {step === "how" && !initialPlace ? <button aria-label="Voltar" onClick={() => setStep("where")}><ArrowLeft size={22} /></button> : <span className="w-[22px]" />}
+        <h2 className="font-display text-lg font-black">Registrar experiência</h2>
+        <button aria-label="Fechar" onClick={onClose}><X size={22} /></button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
+        {step === "where" && <div className="animate-tab-in">
+          <h3 className="mt-2 font-display text-2xl font-black">Onde você foi?</h3>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {([["near", "Usar minha localização", Crosshair], ["search", "Pesquisar lugar", Search], ["map", "Escolher no mapa", MapIcon]] as const).map(([k, l, Icon]) => <button key={k} onClick={() => { setMode(k); if (k === "near") onLocate(); }} className={`flex flex-col items-center gap-2 rounded-2xl p-3 text-center text-[11px] font-extrabold leading-tight ${mode === k ? "bg-primary text-primary-foreground" : "bg-card shadow-sm"}`}><Icon size={22} />{l}</button>)}
+          </div>
+          {mode === "near" && !location && <p className="mt-3 text-xs text-muted-foreground">Sem acesso à sua localização — mostrando lugares no centro de Goiânia.</p>}
+          {mode === "search" && <form onSubmit={(e) => { e.preventDefault(); setQuery(input.trim()); }} className="mt-4 flex h-12 items-center gap-2 rounded-full border border-border bg-card px-4"><Search size={18} className="text-muted-foreground" /><input autoFocus value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ex.: Parque Flamboyant" className="min-w-0 flex-1 bg-transparent outline-none" /><Button type="submit" size="sm" className="rounded-full bg-primary text-primary-foreground">Buscar</Button></form>}
+          {mode === "map" && <div className="relative mt-4"><MapView center={center} user={location} markers={markers} selectedId={mapSel} onSelect={setMapSel} className="h-64 overflow-hidden rounded-2xl" />{mapSel && (() => { const s = results.data?.find((p) => p.id === mapSel); return s ? <Button onClick={() => pick(s)} className="absolute inset-x-3 bottom-3 h-11 rounded-full bg-secondary font-extrabold text-secondary-foreground">Escolher {s.name}</Button> : null; })()}</div>}
+          {mode !== "map" && <div className="mt-4 space-y-2">
+            {results.isLoading && <><Skeleton className="h-16" /><Skeleton className="h-16" /></>}
+            {results.isError && <p className="text-sm text-destructive">Não foi possível buscar lugares.</p>}
+            {(mode === "near" || query) && results.data?.map((p) => <button key={p.id} onClick={() => pick(p)} className="flex w-full items-center gap-3 rounded-2xl bg-card p-2 text-left shadow-sm"><PlacePhoto src={p.photoUrl} alt={p.name} className="size-12 shrink-0 rounded-xl" /><div className="min-w-0 flex-1"><p className="truncate font-bold">{p.name}</p><p className="truncate text-xs text-muted-foreground">{emojiOf(p.category)} {p.address}</p></div><span className="text-[11px] font-bold text-muted-foreground">{formatKm(distanceKm(center, p))}</span></button>)}
+          </div>}
+        </div>}
+        {step === "how" && place && <div className="animate-tab-in space-y-6">
+          <div className="mt-2 flex items-center gap-3 rounded-2xl bg-card p-2 shadow-sm"><PlacePhoto src={place.photoUrl} alt={place.name} className="size-14 shrink-0 rounded-xl" /><div className="min-w-0"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.category}</p><p className="truncate font-display font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p></div></div>
+          <div><h3 className="font-display text-2xl font-black">Como foi?</h3><p className="mt-3 text-sm font-bold">Avaliação geral</p><div className="mt-2 flex gap-2">{[1, 2, 3, 4, 5].map((n) => <button key={n} aria-label={`${n} estrelas`} onClick={() => setRating(n)}><Star size={36} className={n <= rating ? "fill-secondary text-secondary" : "text-border"} /></button>)}</div></div>
+          <div className="space-y-3">{criteriaFor(place.category).map((c) => <div key={c} className="flex items-center justify-between"><span className="text-sm font-bold">{c}</span><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <button key={n} aria-label={`${c}: ${n}`} onClick={() => setScores((s) => ({ ...s, [c]: n }))}><Star size={20} className={n <= (scores[c] ?? 0) ? "fill-primary text-primary" : "text-border"} /></button>)}</div></div>)}</div>
+          <div><p className="text-sm font-bold">📸 Suas fotos</p><div className="mt-2 flex gap-2 overflow-x-auto">{previews.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt={`Foto ${i + 1}`} className="size-20 rounded-xl object-cover" /><button aria-label="Remover foto" onClick={() => setFiles((f) => f.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-foreground text-background"><X size={12} /></button></div>)}{files.length < 5 && <label className="grid size-20 shrink-0 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-border text-muted-foreground"><Camera size={24} /><input type="file" accept="image/*" multiple className="sr-only" onChange={addFiles} /></label>}</div></div>
+          <div><p className="text-sm font-bold">📝 Sua experiência</p><textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} rows={3} placeholder="O que você achou? O que pediria de novo?" className="mt-2 w-full resize-none rounded-xl border border-input bg-card p-3 text-[15px] outline-none focus:border-primary" /></div>
+          <div className="flex items-center justify-between rounded-2xl bg-card p-4 shadow-sm"><span className="font-display text-lg font-black">❤️ Voltaria?</span><button role="switch" aria-checked={wouldReturn} aria-label="Voltaria?" onClick={() => setWouldReturn((v) => !v)} className={`relative h-8 w-14 rounded-full transition ${wouldReturn ? "bg-primary" : "bg-border"}`}><span className={`absolute top-1 size-6 rounded-full bg-background shadow transition-all ${wouldReturn ? "left-7" : "left-1"}`} /></button></div>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock size={12} />Privada: só você vê esta experiência.</p>
+          <Button disabled={!rating || saving} onClick={() => void submit()} className="h-12 w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground hover:bg-secondary/90">{saving ? "Registrando…" : "Registrar experiência"}</Button>
+        </div>}
+      </div>
+    </div>
+  </div>;
 }
