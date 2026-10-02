@@ -35,64 +35,66 @@ export function takePendingLink(): string | null {
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
+/** Non-blocking install card. Shown on mobile browsers (never inside the installed app);
+ *  after a shared link it waits a bit longer so the content opens first. */
 export function InstallPrompt({ shared }: { shared: boolean }) {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [ios, setIos] = useState(false);
-  const [iosHelp, setIosHelp] = useState(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
-    const mobile = /android|iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(ua));
     const isIos = /iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(ua));
+    const mobile = isIos || /android/i.test(ua);
     setIos(isIos);
-    const dismissed = sessionStorage.getItem(DISMISS_KEY) === "1";
-    const eligible = shared && mobile && !isStandalone() && !dismissed;
-    if (eligible && isIos) setOpen(true);
-    const onPrompt = (e: Event) => { e.preventDefault(); setDeferred(e as BIPEvent); if (eligible) setOpen(true); };
-    const onInstalled = () => setOpen(false);
+    const dismissed = localStorage.getItem(DISMISS_KEY) === "1";
+    const eligible = mobile && !isStandalone() && !dismissed;
+    const delay = shared ? 4000 : 2500;
+    let t: number | undefined;
+    // iOS has no native prompt: show instructions after the delay.
+    if (eligible && isIos) t = window.setTimeout(() => setOpen(true), delay);
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferred(e as BIPEvent);
+      if (eligible) { window.clearTimeout(t); t = window.setTimeout(() => setOpen(true), delay); }
+    };
+    const onInstalled = () => { setOpen(false); localStorage.setItem(DISMISS_KEY, "1"); };
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
-    // Android without the native prompt yet: still offer it after a moment.
-    const t = eligible && !isIos ? window.setTimeout(() => setOpen(true), 1200) : undefined;
     return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); window.clearTimeout(t); };
   }, [shared]);
 
-  const close = () => { sessionStorage.setItem(DISMISS_KEY, "1"); setOpen(false); setIosHelp(false); };
+  const close = () => { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); };
   const install = async () => {
-    if (deferred) {
-      await deferred.prompt();
-      await deferred.userChoice;
-      setDeferred(null);
-      setOpen(false);
-      return;
-    }
-    setIosHelp(true);
+    if (!deferred) return close();
+    await deferred.prompt();
+    const choice = await deferred.userChoice;
+    setDeferred(null);
+    if (choice.outcome === "accepted") localStorage.setItem(DISMISS_KEY, "1");
+    setOpen(false);
   };
 
-  if (!open) return null;
+  // Android/desktop without a native prompt available: nothing to offer.
+  if (!open || (!ios && !deferred)) return null;
   return (
-    <div className="absolute inset-0 z-[60] flex items-end bg-foreground/40 animate-in fade-in" role="dialog" aria-modal="true" aria-labelledby="install-title">
-      <div className="w-full animate-in slide-in-from-bottom rounded-t-3xl bg-background p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl">
-        <div className="flex items-start gap-4">
-          <img src="/icon-192.png" alt="" className="size-14 shrink-0 rounded-2xl shadow" />
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] p-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))]">
+      <div role="dialog" aria-labelledby="install-title" className="pointer-events-auto animate-in slide-in-from-bottom fade-in rounded-2xl border border-border bg-background p-4 shadow-xl">
+        <div className="flex items-start gap-3">
+          <img src="/icon-192.png" alt="" className="size-12 shrink-0 rounded-xl shadow" />
           <div className="min-w-0 flex-1">
-            <h2 id="install-title" className="font-display text-xl font-black">📲 Instale o Cê Vai?</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Tenha o Cê Vai? na tela inicial do seu celular e descubra, salve e registre lugares com facilidade.</p>
+            <h2 id="install-title" className="font-display text-base font-black">📲 Instale o Cê Vai?</h2>
+            {ios ? (
+              <p className="mt-0.5 text-sm text-muted-foreground">Toque em Compartilhar <Share size={14} className="inline -mt-0.5 text-primary" /> e depois em <b>Adicionar à Tela de Início</b>.</p>
+            ) : (
+              <p className="mt-0.5 text-sm text-muted-foreground">Tenha o Cê Vai? na tela inicial para acessar seus lugares e experiências com mais facilidade.</p>
+            )}
           </div>
-          <button onClick={close} aria-label="Fechar" className="-mr-2 -mt-2 grid size-9 place-items-center rounded-full text-muted-foreground"><X size={18} /></button>
+          <button onClick={close} aria-label="Fechar" className="-mr-1 -mt-1 grid size-8 place-items-center rounded-full text-muted-foreground"><X size={16} /></button>
         </div>
-        {iosHelp || (ios && !deferred) ? (
-          <div className="mt-5 rounded-2xl bg-muted p-4 text-sm font-semibold">
-            <p className="font-extrabold">Para instalar o Cê Vai?:</p>
-            <p className="mt-2 flex items-center gap-1.5">1. Toque em Compartilhar <Share size={16} className="text-primary" /></p>
-            <p className="mt-1">2. Toque em ‘Adicionar à Tela de Início’</p>
-            {!ios && <p className="mt-2 text-xs font-medium text-muted-foreground">No Android, use o menu do navegador e escolha “Instalar app”.</p>}
-          </div>
-        ) : (
-          <Button onClick={() => void install()} className="mt-5 h-12 w-full rounded-full text-base font-extrabold">Instalar Cê Vai?</Button>
-        )}
-        <Button variant="ghost" onClick={close} className="mt-2 h-11 w-full rounded-full font-bold">Continuar no navegador</Button>
+        <div className="mt-3 flex gap-2">
+          <Button variant="ghost" onClick={close} className="h-10 flex-1 rounded-full text-sm font-bold">Continuar no navegador</Button>
+          <Button onClick={() => (ios ? close() : void install())} className="h-10 flex-1 rounded-full text-sm font-extrabold">{ios ? "Entendi" : "Instalar Cê Vai?"}</Button>
+        </div>
       </div>
     </div>
   );
