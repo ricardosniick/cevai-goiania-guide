@@ -15,7 +15,7 @@ import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
-import { MapView, type MapMarker } from "@/components/cevai/MapView";
+import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
