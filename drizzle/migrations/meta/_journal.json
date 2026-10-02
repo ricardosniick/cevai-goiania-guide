@@ -29,6 +29,13 @@
       "when": 1790945703935,
       "tag": "0003_fairs_stalls_books",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790947342675,
+      "tag": "0004_place_presence",
+      "breakpoints": true
     }
   ]
 }

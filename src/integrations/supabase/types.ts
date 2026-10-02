@@ -212,6 +212,41 @@ export type Database = {
           },
         ]
       }
+      place_presence: {
+        Row: {
+          expires_at: string
+          place_id: string
+          started_at: string
+          status: string | null
+          user_id: string
+          visible: boolean
+        }
+        Insert: {
+          expires_at?: string
+          place_id: string
+          started_at?: string
+          status?: string | null
+          user_id: string
+          visible?: boolean
+        }
+        Update: {
+          expires_at?: string
+          place_id?: string
+          started_at?: string
+          status?: string | null
+          user_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "place_presence_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["google_place_id"]
+          },
+        ]
+      }
       places: {
         Row: {
           address: string | null
@@ -315,6 +350,14 @@ export type Database = {
           avg_rating: number
           experience_count: number
           place_id: string
+        }[]
+      }
+      place_people: {
+        Args: { _place_id: string }
+        Returns: {
+          first_name: string
+          is_me: boolean
+          status: string
         }[]
       }
       stall_experience_stats: {
