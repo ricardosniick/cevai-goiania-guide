@@ -91,7 +91,8 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
     if (m) map.current.panTo({ lat: m.lat, lng: m.lng });
   }, [ready, selectedId, markers]);
 
-  return <div className={`relative bg-muted ${className}`}>
+  // "relative" and "absolute" conflict (relative won, collapsing a full-screen map to 0px); only add it when not positioned.
+  return <div className={`${/\b(absolute|fixed)\b/.test(className) ? "" : "relative"} bg-muted ${className}`}>
     <div ref={el} className="absolute inset-0" />
     {!ready && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{failed ? "Não foi possível carregar o mapa." : "Carregando mapa…"}</div>}
   </div>;
