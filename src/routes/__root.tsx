@@ -101,6 +101,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
     ],
+    scripts: [
+      // Capture Chrome's install prompt before React hydrates; it often fires earlier.
+      { children: "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__cevaiBIP=e;window.dispatchEvent(new Event('cevai-bip'));});" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
