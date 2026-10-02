@@ -14,4 +14,8 @@
 - [x] Adicionar Login/Cadastro com e-mail, senha e Google, salvando o perfil.
 - [x] Atualizar categorias e locais simulados de Goiânia, incluindo clínicas.
 - [x] Separar Fotos Oficiais (Google) e Fotos dos Usuários em abas próprias.
-- [x] Adicionar seletor de telas para testes no preview desktop.
+- [x] Adicionar seletor de telas para testes no preview desktop.- [ ] Reestruturação completa: Google Maps/Places reais (busca, mapa, detalhes, fotos) via backend seguro.
+- [ ] Login ("Que bom te ver por aqui", esqueci senha) e cadastro com confirmar senha.
+- [ ] Explorar com categorias (Restaurantes, Cafés, Parques, Hotéis, Lojas, Cultura, Saúde) e lugares reais.
+- [ ] Experiências na conta: critérios por categoria, várias por lugar, privadas; salvos (Quero conhecer/Já fui/Favoritos).
+- [ ] Remover lugares e fotos fictícios; revisar consistência mobile em 360/390/412.
