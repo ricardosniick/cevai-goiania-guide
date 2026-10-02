@@ -8,6 +8,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -128,6 +130,7 @@ function CeVaiApp() {
   return (
     <main className="min-h-dvh bg-background">
       <div className="relative mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
+        <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
         <div key={screen} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
           {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
           {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
@@ -142,6 +145,7 @@ function CeVaiApp() {
           {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} />}
           {screen === "profile" && <ProfileScreen user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} notify={notify} />}
         </div>
+        </ManageCtx.Provider>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
         {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} editing={modal.edit ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify(modal.edit ? "Experiência atualizada!" : "Experiência registrada!"); }} notify={notify} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
@@ -575,15 +579,55 @@ function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experien
   const date = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(exp.created_at));
   return <article className="overflow-hidden rounded-2xl bg-card shadow-sm">
     {exp.photos.length > 0 && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
-    <div className="p-4">
-      {showPlace && <button onClick={onOpen} className="mb-1 font-display text-base font-black text-left">{exp.place?.name ?? "Lugar"}</button>}
+    <div className="relative p-4">
+      {own && <ExperienceMenu exp={exp} />}
+      {showPlace && <button onClick={onOpen} className="mb-1 pr-8 font-display text-base font-black text-left">{exp.place?.name ?? "Lugar"}</button>}
       {exp.stall && <p className="mb-1 text-xs font-extrabold text-secondary">{exp.stall.emoji} Barraquinha: {exp.stall.name}</p>}
-      <div className="flex items-center justify-between"><Stars value={exp.rating} /><span className="text-[11px] font-bold text-muted-foreground">{own ? "Você" : "Comunidade"} · {date}</span></div>
+      <div className={`flex items-center justify-between ${own && !showPlace ? "pr-8" : ""}`}><Stars value={exp.rating} /><span className="text-[11px] font-bold text-muted-foreground">{own ? "Você" : "Comunidade"} · {date}</span></div>
       {exp.comment && <p className="mt-2 text-sm leading-relaxed text-foreground/85">{exp.comment}</p>}
       {exp.scores.length > 0 && <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1">{exp.scores.map((s) => <p key={s.criterion} className="flex justify-between text-[11px] text-muted-foreground"><span>{s.criterion}</span><span className="font-extrabold text-foreground">{s.score}/5</span></p>)}</div>}
       <div className="mt-3 flex gap-2 text-[11px] font-extrabold"><span className={`rounded-full px-2.5 py-1 ${exp.would_return ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{exp.would_return ? "❤️ Voltaria" : "Não voltaria"}</span>{own && <span className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-muted-foreground"><Lock size={10} />{exp.is_public ? "Compartilhada" : "Privada"}</span>}</div>
     </div>
   </article>;
+}
+
+function ExperienceMenu({ exp }: { exp: Experience }) {
+  const ctx = useContext(ManageCtx);
+  const qc = useQueryClient();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!ctx || exp.user_id !== ctx.user.id) return null;
+  const refresh = () => { for (const k of ["experiences", "place-stats", "stall-stats"]) void qc.invalidateQueries({ queryKey: [k] }); };
+  const togglePrivacy = async () => {
+    const { error } = await supabase.from("experiences").update({ is_public: !exp.is_public }).eq("id", exp.id).eq("user_id", ctx.user.id);
+    if (error) return ctx.notify("Não foi possível alterar a privacidade.");
+    refresh(); ctx.notify(exp.is_public ? "Agora só você vê esta experiência." : "Experiência compartilhada.");
+  };
+  const remove = async () => {
+    setBusy(true);
+    if (exp.photoItems.length) await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path));
+    // Photos and criteria rows are removed by the database together with the experience; the place stays.
+    const { error } = await supabase.from("experiences").delete().eq("id", exp.id).eq("user_id", ctx.user.id);
+    setBusy(false); setConfirm(false);
+    if (error) return ctx.notify("Não foi possível excluir.");
+    refresh(); ctx.notify("Experiência excluída.");
+  };
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><button aria-label="Gerenciar experiência" className="absolute right-2 top-3 grid size-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"><MoreVertical size={18} /></button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="rounded-2xl">
+        <DropdownMenuItem onSelect={() => ctx.onEdit(exp)}>✏️ Editar experiência</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void togglePrivacy()}>🔒 {exp.is_public ? "Tornar privada" : "Compartilhar"}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setConfirm(true)} className="text-destructive focus:text-destructive">🗑️ Excluir experiência</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <AlertDialog open={confirm} onOpenChange={setConfirm}>
+      <AlertDialogContent className="max-w-[90%] rounded-2xl sm:max-w-sm">
+        <AlertDialogHeader><AlertDialogTitle>Excluir esta experiência?</AlertDialogTitle><AlertDialogDescription>Essa ação não poderá ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogFooter><AlertDialogCancel className="rounded-full">Cancelar</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={(e) => { e.preventDefault(); void remove(); }} className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>;
 }
 
 /* ---------------- Feiras: barraquinhas ---------------- */
@@ -719,16 +763,18 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
 
 /* ---------------- Registrar experiência ---------------- */
 
-function ExperienceModal({ user, center, location, initialPlace, initialStall, onLocate, onClose, onSaved, notify }: { user: User; center: LatLng; location: LatLng | null; initialPlace: PlaceSummary | null; initialStall: Stall | null; onLocate: () => void; onClose: () => void; onSaved: () => void; notify: (m: string) => void }) {
+function ExperienceModal({ user, center, location, initialPlace, initialStall, editing = null, onLocate, onClose, onSaved, notify }: { user: User; center: LatLng; location: LatLng | null; initialPlace: PlaceSummary | null; initialStall: Stall | null; editing?: Experience | null; onLocate: () => void; onClose: () => void; onSaved: () => void; notify: (m: string) => void }) {
   const [step, setStep] = useState<"where" | "how">(initialPlace ? "how" : "where");
   const [mode, setMode] = useState<"near" | "search" | "map">("near");
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   const [place, setPlace] = useState<PlaceSummary | null>(initialPlace);
   const [mapSel, setMapSel] = useState<string | null>(null);
-  const [rating, setRating] = useState(0);
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const [comment, setComment] = useState("");
-  const [wouldReturn, setWouldReturn] = useState(true);
+  const [rating, setRating] = useState(editing?.rating ?? 0);
+  const [scores, setScores] = useState<Record<string, number>>(() => Object.fromEntries((editing?.scores ?? []).map((s) => [s.criterion, s.score])));
+  const [comment, setComment] = useState(editing?.comment ?? "");
+  const [wouldReturn, setWouldReturn] = useState(editing?.would_return ?? true);
+  const [isPublic, setIsPublic] = useState(editing?.is_public ?? false);
+  const [kept, setKept] = useState(editing?.photoItems ?? []);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
@@ -743,6 +789,25 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, o
   const submit = async () => {
     if (!place || !rating) return;
     setSaving(true);
+    if (editing) {
+      try {
+        const { error } = await supabase.from("experiences").update({ rating, comment: comment.trim() || null, would_return: wouldReturn, is_public: isPublic }).eq("id", editing.id).eq("user_id", user.id);
+        if (error) throw error;
+        await supabase.from("experience_scores").delete().eq("experience_id", editing.id);
+        const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: editing.id, criterion, score }));
+        if (scoreRows.length) await supabase.from("experience_scores").insert(scoreRows);
+        const removed = editing.photoItems.filter((p) => !kept.some((k) => k.path === p.path)).map((p) => p.path);
+        if (removed.length) { await supabase.from("experience_photos").delete().eq("experience_id", editing.id).in("storage_path", removed); await supabase.storage.from("experience-photos").remove(removed); }
+        for (const [i, f] of files.entries()) {
+          const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const path = `${user.id}/${editing.id}/${Date.now()}-${i}.${ext}`;
+          const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
+          if (!up.error) await supabase.from("experience_photos").insert({ experience_id: editing.id, user_id: user.id, storage_path: path });
+        }
+        onSaved();
+      } catch { notify("Não foi possível atualizar. Tente de novo."); } finally { setSaving(false); }
+      return;
+    }
     try {
       await supabase.from("places").upsert({ google_place_id: place.id, name: place.name, address: place.address, category: place.category, lat: place.lat, lng: place.lng, photo_url: place.photoUrl }, { onConflict: "google_place_id" });
       const { data: exp, error } = await supabase.from("experiences").insert({ user_id: user.id, place_id: place.id, category: place.category, rating, comment: comment.trim() || null, would_return: wouldReturn, stall_id: initialStall?.id ?? null }).select("id").single();
@@ -766,7 +831,7 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, o
     <div className="flex max-h-[94%] w-full animate-modal-in flex-col rounded-t-[1.75rem] bg-background" onClick={(e) => e.stopPropagation()}>
       <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
         {step === "how" && !initialPlace ? <button aria-label="Voltar" onClick={() => setStep("where")}><ArrowLeft size={22} /></button> : <span className="w-[22px]" />}
-        <h2 className="font-display text-lg font-black">Registrar experiência</h2>
+        <h2 className="font-display text-lg font-black">{editing ? "Editar experiência" : "Registrar experiência"}</h2>
         <button aria-label="Fechar" onClick={onClose}><X size={22} /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
@@ -788,11 +853,12 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, o
           <div className="mt-2 flex items-center gap-3 rounded-2xl bg-card p-2 shadow-sm"><PlacePhoto src={place.photoUrl} alt={place.name} className="size-14 shrink-0 rounded-xl" /><div className="min-w-0"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.category}</p><p className="truncate font-display font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{initialStall ? `${initialStall.emoji} Barraquinha: ${initialStall.name}` : place.address}</p></div></div>
           <div><h3 className="font-display text-2xl font-black">Como foi?</h3><p className="mt-3 text-sm font-bold">Avaliação geral</p><div className="mt-2 flex gap-2">{[1, 2, 3, 4, 5].map((n) => <button key={n} aria-label={`${n} estrelas`} onClick={() => setRating(n)}><Star size={36} className={n <= rating ? "fill-secondary text-secondary" : "text-border"} /></button>)}</div></div>
           <div className="space-y-3">{(initialStall ? STALL_CRITERIA : criteriaFor(place.category)).map((c) => <div key={c} className="flex items-center justify-between"><span className="text-sm font-bold">{c}</span><div className="flex gap-1">{[1, 2, 3, 4, 5].map((n) => <button key={n} aria-label={`${c}: ${n}`} onClick={() => setScores((s) => ({ ...s, [c]: n }))}><Star size={20} className={n <= (scores[c] ?? 0) ? "fill-primary text-primary" : "text-border"} /></button>)}</div></div>)}</div>
-          <div><p className="text-sm font-bold">📸 Suas fotos</p><div className="mt-2 flex gap-2 overflow-x-auto">{previews.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt={`Foto ${i + 1}`} className="size-20 rounded-xl object-cover" /><button aria-label="Remover foto" onClick={() => setFiles((f) => f.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-foreground text-background"><X size={12} /></button></div>)}{files.length < 5 && <label className="grid size-20 shrink-0 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-border text-muted-foreground"><Camera size={24} /><input type="file" accept="image/*" multiple className="sr-only" onChange={addFiles} /></label>}</div></div>
+          <div><p className="text-sm font-bold">📸 Suas fotos</p><div className="mt-2 flex gap-2 overflow-x-auto">{kept.map((p) => <div key={p.path} className="relative shrink-0"><img src={p.url} alt="Foto atual" className="size-20 rounded-xl object-cover" /><button aria-label="Remover foto" onClick={() => setKept((k) => k.filter((x) => x.path !== p.path))} className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-foreground text-background"><X size={12} /></button></div>)}{previews.map((u, i) => <div key={u} className="relative shrink-0"><img src={u} alt={`Foto ${i + 1}`} className="size-20 rounded-xl object-cover" /><button aria-label="Remover foto" onClick={() => setFiles((f) => f.filter((_, j) => j !== i))} className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-foreground text-background"><X size={12} /></button></div>)}{files.length + kept.length < 5 && <label className="grid size-20 shrink-0 cursor-pointer place-items-center rounded-xl border-2 border-dashed border-border text-muted-foreground"><Camera size={24} /><input type="file" accept="image/*" multiple className="sr-only" onChange={addFiles} /></label>}</div></div>
           <div><p className="text-sm font-bold">📝 Sua experiência</p><textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} rows={3} placeholder="O que você achou? O que pediria de novo?" className="mt-2 w-full resize-none rounded-xl border border-input bg-card p-3 text-[15px] outline-none focus:border-primary" /></div>
           <div className="flex items-center justify-between rounded-2xl bg-card p-4 shadow-sm"><span className="font-display text-lg font-black">❤️ Voltaria?</span><button role="switch" aria-checked={wouldReturn} aria-label="Voltaria?" onClick={() => setWouldReturn((v) => !v)} className={`relative h-8 w-14 rounded-full transition ${wouldReturn ? "bg-primary" : "bg-border"}`}><span className={`absolute top-1 size-6 rounded-full bg-background shadow transition-all ${wouldReturn ? "left-7" : "left-1"}`} /></button></div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock size={12} />Privada: só você vê esta experiência.</p>
-          <Button disabled={!rating || saving} onClick={() => void submit()} className="h-12 w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground hover:bg-secondary/90">{saving ? "Registrando…" : "Registrar experiência"}</Button>
+          {editing ? <div className="flex items-center justify-between rounded-2xl bg-card p-4 shadow-sm"><span className="flex items-center gap-1.5 text-sm font-bold"><Lock size={14} />{isPublic ? "Compartilhada com a comunidade" : "Privada: só você vê"}</span><button role="switch" aria-checked={isPublic} aria-label="Compartilhar experiência" onClick={() => setIsPublic((v) => !v)} className={`relative h-8 w-14 rounded-full transition ${isPublic ? "bg-primary" : "bg-border"}`}><span className={`absolute top-1 size-6 rounded-full bg-background shadow transition-all ${isPublic ? "left-7" : "left-1"}`} /></button></div>
+          : <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock size={12} />Privada: só você vê esta experiência.</p>}
+          <Button disabled={!rating || saving} onClick={() => void submit()} className="h-12 w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground hover:bg-secondary/90">{saving ? (editing ? "Atualizando…" : "Registrando…") : (editing ? "Atualizar experiência" : "Registrar experiência")}</Button>
         </div>}
       </div>
     </div>
