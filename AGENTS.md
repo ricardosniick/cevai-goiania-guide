@@ -11,3 +11,4 @@
 
 - Keep the mobile experience as a single state-driven route; this preserves app-like transitions without unnecessary URL changes.
 - Store experiences, photos and saved places in the backend per user (private by default); real place data comes only from Google Places via authenticated server functions — never fabricate places or use AI images for real venues.
+- Category taxonomy (groups, subcategories, Google types, criteria) lives in src/lib/categories.ts and is shared by client and server; why: one source for filters, labels and Places requests.
