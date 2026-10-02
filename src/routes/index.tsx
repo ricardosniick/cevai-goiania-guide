@@ -307,12 +307,14 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
 
 /* ---------------- Shared pieces ---------------- */
 
-function usePlaces(user: User | null, center: LatLng, category: string | null, query: string) {
+function usePlaces(user: User | null, center: LatLng, category: string | null, query: string, radius?: number) {
   const search = useServerFn(searchPlaces);
+  // ~1km grid + radius bucket: nearby repeat searches reuse the cached result instead of calling Google again.
   const lat = Math.round(center.lat * 100) / 100; const lng = Math.round(center.lng * 100) / 100;
+  const r = radius ? Math.min(25000, Math.max(300, Math.round(radius / 500) * 500)) : undefined;
   return useQuery({
-    queryKey: ["places", category, query, lat, lng],
-    queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng } }),
+    queryKey: ["places", category, query, lat, lng, r ?? null],
+    queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng, ...(r ? { radius: r } : {}) } }),
     enabled: !!user,
     staleTime: 10 * 60 * 1000,
     retry: false,
@@ -440,14 +442,21 @@ function PlaceRow({ place, center, stat, onOpen }: { place: PlaceSummary; center
 function MapScreen({ user, center, location, category, onCategory, onLocate, onOpen, onLogin }: { user: User | null; center: LatLng; location: LatLng | null; category: string | null; onCategory: (c: string | null) => void; onLocate: () => void; onOpen: (id: string) => void; onLogin: () => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const places = usePlaces(user, center, category, query);
+  // `area` = region last searched; `view` = region currently on screen (updated when the user stops moving).
+  const [area, setArea] = useState<MapArea | null>(null);
+  const [view, setView] = useState<MapArea | null>(null);
+  useEffect(() => { setArea(null); }, [center.lat, center.lng]);
+  const onIdle = useCallback((a: MapArea) => { setView(a); setArea((prev) => prev ?? a); }, []);
+  const places = usePlaces(user, area ?? center, category, query, area?.radius);
+  const moved = !!(area && view) && (distanceKm(area, view) * 1000 > area.radius * 0.35 || view.radius > area.radius * 1.6 || view.radius < area.radius / 1.6);
   const sits = useSituations(user, (places.data ?? []).map((p) => p.id));
   const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => { const st = sits.data?.[p.id]?.situations; return { id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: st?.length ? `${p.name} · ${st[0]}` : p.name, badge: st?.[0]?.split(" ")[0] }; }), [places.data, sits.data]);
   const current = places.data?.find((p) => p.id === selected) ?? null;
   const curSit = current ? sits.data?.[current.id] : undefined;
   const stats = usePlaceStats(user, current ? [current.id] : []);
   return <section className="relative h-full">
-    <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} className="absolute inset-0" />
+    <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} onIdle={onIdle} cluster fit={!!query} className="absolute inset-0" />
+    {user && moved && !places.isFetching && !current && <button onClick={() => { setSelected(null); setArea(view); }} className="absolute left-1/2 top-[calc(max(1rem,env(safe-area-inset-top))+7.5rem)] z-20 -translate-x-1/2 animate-tab-in rounded-full bg-primary px-5 py-2.5 text-sm font-extrabold text-primary-foreground shadow-lg">🔎 Buscar nesta área</button>}
     <div className="absolute inset-x-0 top-0 z-10 space-y-3 bg-gradient-to-b from-background/90 to-transparent pb-6 pt-[max(1rem,env(safe-area-inset-top))]">
       <form onSubmit={(e) => { e.preventDefault(); setSelected(null); setQuery(input.trim()); }} className="mx-5 flex h-12 items-center gap-3 rounded-full bg-card px-4 shadow-lg">
         <Search size={18} className="text-muted-foreground" />
