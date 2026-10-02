@@ -179,3 +179,31 @@ export function presenceInterests(category: string): string[] {
   if (category === "Restaurantes") return FOOD;
   return COURT;
 }
+
+/* ---------------- Situação agora ---------------- */
+/** Kinds of momentary situation sets. Add a kind + its options to extend. */
+export type SituationKind = "comida" | "sorveteria" | "tenis" | "esporte" | "parque" | "evento";
+export const SITUATION_OPTIONS: Record<SituationKind, string[]> = {
+  comida: ["🪑 Tem mesa", "🪑 Poucas mesas", "🚫 Sem mesa", "🧍 Tem fila", "⏳ Fila grande", "👥 Muito cheio", "🙂 Movimento tranquilo", "🅿️ Estacionamento difícil"],
+  sorveteria: ["🪑 Tem lugar para sentar", "🚫 Sem lugar para sentar", "🧍 Tem fila", "⏳ Fila grande", "👥 Muito cheio", "🙂 Movimento tranquilo", "🅿️ Estacionamento difícil"],
+  tenis: ["🏟️ Quadra disponível", "🚫 Sem quadra disponível", "⏳ Fila para jogar", "👥 Lotado", "🙂 Movimento tranquilo", "🅿️ Estacionamento difícil"],
+  esporte: ["🏐 Tem vaga para jogar", "🚫 Sem vaga", "⏳ Fila para entrar", "👥 Lotado", "🙂 Movimento tranquilo", "🅿️ Estacionamento difícil"],
+  parque: ["🙂 Tranquilo", "👥 Muito movimentado", "🅿️ Estacionamento difícil", "🚶 Pistas movimentadas", "🚲 Ciclovia movimentada"],
+  evento: ["🎟️ Ingressos disponíveis", "🧍 Tem fila", "⏳ Fila grande", "👥 Muito cheio", "🪑 Poucos lugares", "🅿️ Estacionamento cheio"],
+};
+const FOOD_CATS = new Set(["Restaurantes", "Cafés", "Padarias", "Bares", "Docerias", "Lanchonetes", "Feiras gastronômicas"]);
+/** Returns the situation set for a place, or null when "Situação agora" doesn't apply. */
+export function situationKind(category: string | null | undefined, hint = ""): SituationKind | null {
+  if (!category) return null;
+  const h = hint.toLowerCase();
+  if (/sorvet|gelato|a[çc]a[ií]|ice.?cream/.test(h)) return "sorveteria";
+  if (category === "Quadras de tênis" || category === "Beach tennis") return "tenis";
+  if (category === "Quadras esportivas" || category === "Clubes esportivos") return /t[êe]nis/.test(h) ? "tenis" : "esporte";
+  if (category === "Parques") return "parque";
+  if (["Cinemas", "Teatros", "Eventos", "Shows", "Eventos de rua"].includes(category)) return "evento";
+  if (FOOD_CATS.has(category)) return "comida";
+  return null;
+}
+export function situationRadius(category: string): number {
+  return PRESENCE_CATEGORIES.has(category) ? presenceRadius(category) : 150;
+}

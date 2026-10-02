@@ -8,6 +8,13 @@
       "when": 1790949695633,
       "tag": "0000_presence_connections_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790950501022,
+      "tag": "0001_place_situations",
+      "breakpoints": true
     }
   ]
 }

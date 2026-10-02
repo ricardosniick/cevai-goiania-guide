@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { colorOfLabel } from "@/lib/categories";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string };
+export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string | undefined };
 
 export const CATEGORY_COLORS = { Outros: "#123A32" };
 
@@ -62,7 +62,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, className
     pins.current = markers.map((m) => {
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({
-        map: map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, zIndex: selected ? 10 : 1,
+        map: map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, label: m.badge ? { text: m.badge, fontSize: "13px" } : undefined, zIndex: selected ? 10 : 1,
         icon: { path: g.maps.SymbolPath.CIRCLE, scale: selected ? 13 : 9, fillColor: colorOfLabel(m.category), fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
       });
       marker.addListener("click", () => onSelect?.(m.id));
