@@ -370,18 +370,44 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
       {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
       {first && <button onClick={() => onOpen(first.id)} className="mx-5 mt-3 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left shadow-md">
         <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
-        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-3 text-xs font-bold text-foreground/80">{first.rating && <span className="flex items-center gap-1"><Star size={13} className="fill-secondary text-secondary" />{first.rating.toFixed(1)} no Google</span>}<span>{formatKm(distanceKm(center, first))}</span></p></div>
+        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-3 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><span>· {formatKm(distanceKm(center, first))}</span></p><p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p></div>
       </button>}
-      <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} onOpen={() => onOpen(p.id)} />)}</div>
+      <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} stat={stats.data?.[p.id]} onOpen={() => onOpen(p.id)} />)}</div>
       {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
     </>}
   </section>;
 }
 
-function PlaceRow({ place, center, onOpen }: { place: PlaceSummary; center: LatLng; onOpen: () => void }) {
+type PlaceStat = { avg: number; count: number };
+function usePlaceStats(user: User | null, ids: string[]) {
+  const key = [...ids].sort().join(",");
+  return useQuery({
+    queryKey: ["place-stats", key],
+    enabled: !!user && ids.length > 0,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("place_experience_stats", { _place_ids: ids });
+      if (error) throw error;
+      const map: Record<string, PlaceStat> = {};
+      (data ?? []).forEach((r) => { map[r.place_id] = { avg: Number(r.avg_rating), count: Number(r.experience_count) }; });
+      return map;
+    },
+  });
+}
+const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
+function GoogleRating({ rating, count, size = "sm" }: { rating: number | null; count?: number | null; size?: "sm" | "md" }) {
+  if (!rating) return <span className="text-muted-foreground">Sem nota no Google</span>;
+  return <span className="inline-flex items-center gap-1"><Star size={size === "md" ? 14 : 11} className="fill-secondary text-secondary" />{fmt1(rating)}<span className="rounded-sm bg-muted px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-muted-foreground">Google</span>{count ? <span className="font-semibold text-muted-foreground">({count})</span> : null}</span>;
+}
+function CeVaiRating({ stat }: { stat?: PlaceStat }) {
+  if (!stat?.count) return <span className="text-[11px] font-semibold italic text-muted-foreground">Ainda sem experiências no Cê Vai?</span>;
+  return <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-primary"><Heart size={11} className="fill-secondary text-secondary" />{fmt1(stat.avg)} · Cê Vai? · {stat.count} {stat.count === 1 ? "experiência" : "experiências"}</span>;
+}
+
+function PlaceRow({ place, center, stat, onOpen }: { place: PlaceSummary; center: LatLng; stat?: PlaceStat; onOpen: () => void }) {
   return <button onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left shadow-sm">
     <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
-    <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex gap-3 text-[11px] font-bold text-foreground/70">{place.rating && <span className="flex items-center gap-1"><Star size={11} className="fill-secondary text-secondary" />{place.rating.toFixed(1)}</span>}<span>{formatKm(distanceKm(center, place))}</span></p></div>
+    <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><span>· {formatKm(distanceKm(center, place))}</span></p><CeVaiRating stat={stat} /></div>
     <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
   </button>;
 }
@@ -394,6 +420,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
   const places = usePlaces(user, center, category, query);
   const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: p.name })), [places.data]);
   const current = places.data?.find((p) => p.id === selected) ?? null;
+  const stats = usePlaceStats(user, current ? [current.id] : []);
   return <section className="relative h-full">
     <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} className="absolute inset-0" />
     <div className="absolute inset-x-0 top-0 z-10 space-y-3 bg-gradient-to-b from-background/90 to-transparent pb-6 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -411,7 +438,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
     {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
       <div className="flex gap-3 p-3">
         <PlacePhoto src={current.photoUrl} alt={current.name} className="size-24 shrink-0 rounded-xl" />
-        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: CATEGORY_COLORS[current.category] }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))}{current.rating ? ` · ★ ${current.rating.toFixed(1)}` : ""}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: CATEGORY_COLORS[current.category] }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p><CeVaiRating stat={stats.data?.[current.id]} /></div>
         <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
       </div>
       <div className="px-3 pb-3"><Button onClick={() => onOpen(current.id)} className="h-11 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Ver lugar</Button></div>
@@ -456,6 +483,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
   const place = useQuery({ queryKey: ["place", placeId], queryFn: () => details({ data: { placeId } }), enabled: !!user, staleTime: 30 * 60 * 1000, retry: false });
   const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }), enabled: !!user });
   const saved = useSaved(user);
+  const stats = usePlaceStats(user, [placeId]);
   const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos">("Sobre");
   const lists = new Set((saved.data ?? []).filter((s) => s.place_id === placeId).map((s) => s.list as SavedList));
 
@@ -481,7 +509,11 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
       {p && <>
         <div className="px-5 pt-4">
           <p className="flex items-start gap-2 text-sm text-foreground/80"><MapPin size={16} className="mt-0.5 shrink-0 text-secondary" />{p.address}</p>
-          <p className="mt-2 flex gap-4 text-xs font-bold text-muted-foreground">{p.rating && <span>★ {p.rating.toFixed(1)} no Google ({p.ratingCount})</span>}<span>{formatKm(distanceKm(center, p))} de você</span></p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">{formatKm(distanceKm(center, p))} de você</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-border bg-muted/60 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avaliação do Google</p><p className="mt-1 text-sm font-black"><GoogleRating rating={p.rating} count={p.ratingCount} size="md" /></p><p className="mt-1 text-[10px] text-muted-foreground">Informação externa</p></div>
+            <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê Vai?</p>{stats.data?.[p.id]?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(stats.data[p.id].avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{stats.data[p.id].count} {stats.data[p.id].count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê Vai?.</p>}</div>
+          </div>
         </div>
         <div className="sticky top-0 z-10 mt-4 flex border-b border-border bg-background px-5">
           {(["Sobre", "Experiências", "Fotos"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`flex-1 border-b-2 py-3 text-sm font-extrabold ${tab === t ? "border-secondary text-primary" : "border-transparent text-muted-foreground"}`}>{t}</button>)}
