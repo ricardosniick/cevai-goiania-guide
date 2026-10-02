@@ -145,3 +145,7 @@ export const STALL_KINDS = [
   { kind: "Roupas", emoji: "👕" }, { kind: "Artesanato", emoji: "🎨" }, { kind: "Antiguidades", emoji: "🏺" },
   { kind: "Hortifrúti", emoji: "🥬" }, { kind: "Outros", emoji: "🛖" },
 ];
+
+/** "Estou aqui" só existe em locais de convivência social; qualquer outra categoria não exibe o recurso. */
+export const PRESENCE_CATEGORIES = new Set(["Bares", "Restaurantes", "Eventos", "Parques"]);
+export const allowsPresence = (category: string | null | undefined) => !!category && PRESENCE_CATEGORIES.has(category);
