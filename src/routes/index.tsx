@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
-} from "lucide-react";
+, Share2 } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -16,6 +16,7 @@ import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
+import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
 import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
 type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile" | "categories";
@@ -117,6 +118,14 @@ function CeVaiApp() {
   }, [notify]);
   useEffect(() => { if (user) locate(); }, [user, locate]);
 
+  const [shared, setShared] = useState(false);
+  useEffect(() => { if (captureSharedLink()) setShared(true); }, []);
+  useEffect(() => {
+    if (!authReady) return;
+    if (user) { const id = takePendingLink(); if (id) { setPlaceId(id); setReturnTo("home"); go("detail"); } }
+    else if (localStorage.getItem(PENDING_LINK_KEY)) { notify("Entre na sua conta para ver o lugar compartilhado."); go("login"); }
+  }, [authReady, user, go, notify]);
+
   const openPlace = (id: string, from: MainScreen) => { setPlaceId(id); setReturnTo(from); go("detail"); };
   const openModal = (place: PlaceSummary | null = null, stall: Stall | null = null) => {
     if (!user) { notify("Entre na sua conta para registrar experiências."); go("login"); return; }
@@ -148,6 +157,7 @@ function CeVaiApp() {
         </ManageCtx.Provider>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
         {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} editing={modal.edit ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify(modal.edit ? "Experiência atualizada!" : "Experiência registrada!"); }} notify={notify} />}
+        <InstallPrompt shared={shared} />
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
       </div>
     </main>
@@ -519,6 +529,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
         {p ? <PlacePhoto src={p.photoUrl} alt={p.name} className="h-full w-full" /> : <Skeleton className="h-full rounded-none" />}
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-transparent to-foreground/20" />
         <button onClick={onBack} aria-label="Voltar" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><ArrowLeft size={20} /></button>
+        <button aria-label="Compartilhar lugar" onClick={async () => { const url = shareUrlFor(placeId); try { if (navigator.share) await navigator.share({ title: p?.name ?? "Cê Vai?", text: p ? `${p.name} no Cê Vai?` : "Olha esse lugar no Cê Vai?", url }); else { await navigator.clipboard.writeText(url); notify("Link copiado!"); } } catch { /* cancelado */ } }} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><Share2 size={18} /></button>
         {p && <div className="absolute inset-x-5 bottom-4 text-primary-foreground"><p className="text-xs font-extrabold uppercase tracking-wider text-secondary">{emojiOf(p.category)} {p.typeLabel || p.category}</p><h1 className="mt-1 font-display text-[1.7rem] font-black leading-tight">{p.name}</h1></div>}
       </div>
       {!user && <LoginPrompt onLogin={onBack} />}
