@@ -792,3 +792,54 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, o
     </div>
   </div>;
 }
+
+const PRESENCE_STATUS = ["🍻 Bebendo", "🍽️ Comendo", "🎵 Curtindo música", "👥 Com amigos", "🆕 Primeira vez aqui", "👋 Quero conhecer pessoas"];
+
+function PresencePanel({ user, place, notify }: { user: User; place: PlaceSummary; notify: (m: string) => void }) {
+  const qc = useQueryClient();
+  const mine = useQuery({ queryKey: ["presence", "mine", user.id], queryFn: async () => {
+    const { data } = await supabase.from("place_presence").select("place_id, visible, status, expires_at").eq("user_id", user.id).maybeSingle();
+    return data && new Date(data.expires_at) > new Date() ? data : null;
+  } });
+  const people = useQuery({ queryKey: ["presence", "people", place.id], refetchInterval: 60000, queryFn: async () => {
+    const { data, error } = await supabase.rpc("place_people", { _place_id: place.id }); if (error) throw error; return data ?? [];
+  } });
+  const [choosing, setChoosing] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const here = mine.data?.place_id === place.id ? mine.data : null;
+  const refresh = () => { void qc.invalidateQueries({ queryKey: ["presence"] }); };
+  const start = async () => {
+    await supabase.from("places").upsert({ google_place_id: place.id, name: place.name, address: place.address, category: place.category, lat: place.lat, lng: place.lng }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    const { error } = await supabase.from("place_presence").upsert({ user_id: user.id, place_id: place.id, visible, status, started_at: new Date().toISOString(), expires_at: new Date(Date.now() + 3 * 3600 * 1000).toISOString() });
+    if (error) return notify("Não foi possível marcar presença.");
+    setChoosing(false); refresh(); notify(visible ? "Você aparece para quem está aqui." : "Presença marcada, invisível.");
+  };
+  const end = async () => { await supabase.from("place_presence").delete().eq("user_id", user.id); refresh(); notify("Presença encerrada."); };
+  const list = people.data ?? [];
+  const others = list.filter((x) => !x.is_me);
+  return <div className="mt-4 rounded-2xl bg-card p-4 shadow-sm">
+    {here ? <div className="flex items-center justify-between gap-3">
+      <div><p className="font-display font-black text-primary">📍 Você está aqui</p><p className="text-xs text-muted-foreground">{here.visible ? "🟢 Visível" : "⚪ Invisível"}{here.status ? ` · ${here.status}` : ""} · some sozinho em até 3h</p></div>
+      <Button variant="outline" className="rounded-full" onClick={() => void end()}>Encerrar presença</Button>
+    </div> : !choosing ? <div className="flex items-center justify-between gap-3">
+      <p className="font-display font-black text-primary">Você está aqui?</p>
+      <Button className="rounded-full" onClick={() => { setVisible(false); setStatus(null); setChoosing(true); }}><MapPin size={16} />Estou aqui</Button>
+    </div> : <div className="space-y-3">
+      <p className="font-display font-black text-primary">Como quer marcar presença?</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => setVisible(true)} className={`rounded-2xl border p-3 text-left text-xs font-bold ${visible ? "border-primary bg-primary/10 text-primary" : "border-border"}`}>🟢 Aparecer para outras pessoas</button>
+        <button onClick={() => setVisible(false)} className={`rounded-2xl border p-3 text-left text-xs font-bold ${!visible ? "border-primary bg-primary/10 text-primary" : "border-border"}`}>⚪ Ficar invisível</button>
+      </div>
+      <p className="text-[11px] font-bold text-muted-foreground">Status (opcional)</p>
+      <div className="flex flex-wrap gap-1.5">{PRESENCE_STATUS.map((s) => <button key={s} onClick={() => setStatus(status === s ? null : s)} className={`rounded-full border px-3 py-1.5 text-[11px] font-bold ${status === s ? "border-secondary bg-secondary/15 text-secondary" : "border-border"}`}>{s}</button>)}</div>
+      <p className="text-[10px] text-muted-foreground">Mostramos só seu primeiro nome e que você está neste lugar — nunca sua posição exata.</p>
+      <div className="flex gap-2"><Button variant="ghost" className="flex-1 rounded-full" onClick={() => setChoosing(false)}>Cancelar</Button><Button className="flex-1 rounded-full" onClick={() => void start()}>Confirmar</Button></div>
+    </div>}
+    {list.length > 0 && <div className="mt-4 border-t border-border pt-3">
+      <p className="text-sm font-black">👥 Pessoas no local</p>
+      <p className="text-xs text-muted-foreground">{list.length} {list.length === 1 ? "pessoa está compartilhando" : "pessoas estão compartilhando"} que está aqui agora.</p>
+      <ul className="mt-2 space-y-1.5">{others.map((x, i) => <li key={i} className="flex items-center gap-2 text-sm"><span className="grid size-7 place-items-center rounded-full bg-muted text-xs font-black">{x.first_name.charAt(0)}</span><span className="font-bold">{x.first_name}</span>{x.status && <span className="text-xs text-muted-foreground">“{x.status}”</span>}</li>)}</ul>
+    </div>}
+  </div>;
+}

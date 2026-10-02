@@ -1,11 +1,11 @@
 {
+  "version": 1,
   "asset_id": "38263db4-e3d8-4ef0-b2ea-a93a490d4025",
-  "content_type": "image/jpeg",
-  "created_at": "2026-10-01T20:14:26Z",
-  "original_filename": "goiania-flamboyant-real.jpg",
-  "project_id": "abde32a3-b154-4510-822a-0c5e3f844b25",
-  "r2_key": "a/v1/abde32a3-b154-4510-822a-0c5e3f844b25/38263db4-e3d8-4ef0-b2ea-a93a490d4025/goiania-flamboyant-real.jpg",
-  "size": 350973,
+  "project_id": "d31e356a-abbf-4afa-ba5b-03028a35ec2b",
   "url": "/__l5e/assets-v1/38263db4-e3d8-4ef0-b2ea-a93a490d4025/goiania-flamboyant-real.jpg",
-  "version": 1
+  "r2_key": "a/v1/d31e356a-abbf-4afa-ba5b-03028a35ec2b/38263db4-e3d8-4ef0-b2ea-a93a490d4025/goiania-flamboyant-real.jpg",
+  "original_filename": "goiania-flamboyant-real.jpg",
+  "size": 350973,
+  "content_type": "image/jpeg",
+  "created_at": "2026-10-01T20:14:26Z"
 }
