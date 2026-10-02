@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { colorOfLabel } from "@/lib/categories";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string };
+export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string | undefined };
 
 export const CATEGORY_COLORS = { Outros: "#123A32" };
 
