@@ -80,6 +80,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     await deferred.prompt();
     const choice = await deferred.userChoice;
     setDeferred(null);
+    (window as unknown as { __cevaiBIP?: BIPEvent }).__cevaiBIP = undefined;
     if (choice.outcome === "accepted") localStorage.setItem(DISMISS_KEY, "1");
     setOpen(false);
   };
