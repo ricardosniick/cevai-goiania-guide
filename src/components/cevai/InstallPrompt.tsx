@@ -47,21 +47,31 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     const isIos = /iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(ua));
     const mobile = isIos || /android/i.test(ua);
     setIos(isIos);
+    // Test helper: `?instalar=1` clears the saved "Continuar no navegador" choice and shows the card again.
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("instalar") === "1") {
+      localStorage.removeItem(DISMISS_KEY);
+      url.searchParams.delete("instalar");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
     const dismissed = localStorage.getItem(DISMISS_KEY) === "1";
     const eligible = mobile && !isStandalone() && !dismissed;
     const delay = shared ? 4000 : 2500;
     let t: number | undefined;
     // iOS has no native prompt: show instructions after the delay.
     if (eligible && isIos) t = window.setTimeout(() => setOpen(true), delay);
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BIPEvent);
+    const w = window as unknown as { __cevaiBIP?: BIPEvent };
+    const useEvent = (e: BIPEvent) => {
+      setDeferred(e);
       if (eligible) { window.clearTimeout(t); t = window.setTimeout(() => setOpen(true), delay); }
     };
-    const onInstalled = () => { setOpen(false); localStorage.setItem(DISMISS_KEY, "1"); };
-    window.addEventListener("beforeinstallprompt", onPrompt);
+    // The event may have fired before hydration; the early script in the page head stores it.
+    if (w.__cevaiBIP) useEvent(w.__cevaiBIP);
+    const onPrompt = () => { if (w.__cevaiBIP) useEvent(w.__cevaiBIP); };
+    const onInstalled = () => { setOpen(false); localStorage.setItem(DISMISS_KEY, "1"); w.__cevaiBIP = undefined; };
+    window.addEventListener("cevai-bip", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
-    return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); window.clearTimeout(t); };
+    return () => { window.removeEventListener("cevai-bip", onPrompt); window.removeEventListener("appinstalled", onInstalled); window.clearTimeout(t); };
   }, [shared]);
 
   const close = () => { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); };
