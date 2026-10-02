@@ -61,13 +61,13 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     // iOS has no native prompt: show instructions after the delay.
     if (eligible && isIos) t = window.setTimeout(() => setOpen(true), delay);
     const w = window as unknown as { __cevaiBIP?: BIPEvent | undefined };
-    const useEvent = (e: BIPEvent) => {
+    const takeEvent = (e: BIPEvent) => {
       setDeferred(e);
       if (eligible) { window.clearTimeout(t); t = window.setTimeout(() => setOpen(true), delay); }
     };
     // The event may have fired before hydration; the early script in the page head stores it.
-    if (w.__cevaiBIP) useEvent(w.__cevaiBIP);
-    const onPrompt = () => { if (w.__cevaiBIP) useEvent(w.__cevaiBIP); };
+    if (w.__cevaiBIP) takeEvent(w.__cevaiBIP);
+    const onPrompt = () => { if (w.__cevaiBIP) takeEvent(w.__cevaiBIP); };
     const onInstalled = () => { setOpen(false); localStorage.setItem(DISMISS_KEY, "1"); w.__cevaiBIP = undefined; };
     window.addEventListener("cevai-bip", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
