@@ -37,7 +37,7 @@ type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ out
 
 /** Non-blocking install card. Shown on mobile browsers (never inside the installed app);
  *  after a shared link it waits a bit longer so the content opens first. */
-export function InstallPrompt({ shared }: { shared: boolean }) {
+export function InstallPrompt({ shared, ready = true }: { shared: boolean; ready?: boolean }) {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [ios, setIos] = useState(false);
@@ -86,7 +86,8 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     setOpen(false);
   };
 
-  if (!open) return null;
+  // Never cover the welcome/sign-in buttons: wait until the user is inside the app.
+  if (!open || !ready) return null;
   const manual = !ios && !deferred; // Android browser hasn't offered its install prompt (yet)
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] p-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))]">
