@@ -35,81 +35,78 @@ export function takePendingLink(): string | null {
 
 type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
-/** Non-blocking install card. Shown on mobile browsers (never inside the installed app);
- *  after a shared link it waits a bit longer so the content opens first. */
-export function InstallPrompt({ shared, ready = true }: { shared: boolean; ready?: boolean }) {
+/** Install sheet shown on mobile browsers before sign-up/login (never inside the installed app).
+ *  Uses Chrome's native prompt when available; otherwise shows the app's own instructions.
+ *  `?instalar=1` forces it again even after "Continuar no navegador". */
+export function InstallPrompt({ shared }: { shared: boolean }) {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [ios, setIos] = useState(false);
+  const [help, setHelp] = useState(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
     const isIos = /iphone|ipad|ipod/i.test(ua) || (navigator.maxTouchPoints > 1 && /macintosh/i.test(ua));
-    const mobile = isIos || /android/i.test(ua);
+    const mobile = isIos || /android|mobile/i.test(ua);
     setIos(isIos);
-    // Test helper: `?instalar=1` clears the saved "Continuar no navegador" choice and shows the card again.
     const url = new URL(window.location.href);
-    if (url.searchParams.get("instalar") === "1") {
+    const forced = url.searchParams.get("instalar") === "1";
+    if (forced) {
       localStorage.removeItem(DISMISS_KEY);
       url.searchParams.delete("instalar");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
     const dismissed = localStorage.getItem(DISMISS_KEY) === "1";
-    const eligible = mobile && !isStandalone() && !dismissed;
-    const delay = shared ? 4000 : 2500;
-    let t: number | undefined;
-    // Show the card after the delay; on Android the native prompt is used when Chrome provides it,
-    // otherwise the card explains the browser menu option.
-    if (eligible) t = window.setTimeout(() => setOpen(true), delay);
+    const eligible = !isStandalone() && (forced || (mobile && !dismissed));
+    // Shared links: let the content open first, then offer installation.
+    const t = eligible ? window.setTimeout(() => setOpen(true), shared ? 3000 : 600) : undefined;
     const w = window as unknown as { __cevaiBIP?: BIPEvent | undefined };
-    const takeEvent = (e: BIPEvent) => {
-      setDeferred(e);
-      if (eligible) { window.clearTimeout(t); t = window.setTimeout(() => setOpen(true), delay); }
-    };
     // The event may have fired before hydration; the early script in the page head stores it.
-    if (w.__cevaiBIP) takeEvent(w.__cevaiBIP);
-    const onPrompt = () => { if (w.__cevaiBIP) takeEvent(w.__cevaiBIP); };
+    if (w.__cevaiBIP) setDeferred(w.__cevaiBIP);
+    const onPrompt = () => { if (w.__cevaiBIP) setDeferred(w.__cevaiBIP); };
     const onInstalled = () => { setOpen(false); localStorage.setItem(DISMISS_KEY, "1"); w.__cevaiBIP = undefined; };
     window.addEventListener("cevai-bip", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => { window.removeEventListener("cevai-bip", onPrompt); window.removeEventListener("appinstalled", onInstalled); window.clearTimeout(t); };
   }, [shared]);
 
-  const close = () => { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); };
+  const close = () => { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); setHelp(false); };
   const install = async () => {
-    if (!deferred) return close();
+    // No native prompt from the browser: show the Android menu instructions instead.
+    if (!deferred) { setHelp(true); return; }
     await deferred.prompt();
     const choice = await deferred.userChoice;
     setDeferred(null);
     (window as unknown as { __cevaiBIP?: BIPEvent | undefined }).__cevaiBIP = undefined;
-    if (choice.outcome === "accepted") localStorage.setItem(DISMISS_KEY, "1");
-    setOpen(false);
+    if (choice.outcome === "accepted") { localStorage.setItem(DISMISS_KEY, "1"); setOpen(false); }
+    else setHelp(true);
   };
 
-  // Never cover the welcome/sign-in buttons: wait until the user is inside the app.
-  if (!open || !ready) return null;
-  const manual = !ios && !deferred; // Android browser hasn't offered its install prompt (yet)
+  if (!open) return null;
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[60] p-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+5rem))]">
-      <div role="dialog" aria-labelledby="install-title" className="pointer-events-auto animate-in slide-in-from-bottom fade-in rounded-2xl border border-border bg-background p-4 shadow-xl">
-        <div className="flex items-start gap-3">
-          <img src="/icon-192.png" alt="" className="size-12 shrink-0 rounded-xl shadow" />
+    <div className="absolute inset-0 z-[60] flex items-end bg-foreground/40 animate-in fade-in" role="dialog" aria-modal="true" aria-labelledby="install-title">
+      <div className="w-full animate-in slide-in-from-bottom rounded-t-3xl bg-background p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl">
+        <div className="flex items-start gap-4">
+          <img src="/icon-192.png" alt="" className="size-14 shrink-0 rounded-2xl shadow" />
           <div className="min-w-0 flex-1">
-            <h2 id="install-title" className="font-display text-base font-black">{ios ? "📲 Instale o Cê Vai?" : "📲 Tenha o Cê Vai? na tela inicial"}</h2>
-            {ios ? (
-              <p className="mt-0.5 text-sm text-muted-foreground">Toque em Compartilhar <Share size={14} className="inline -mt-0.5 text-primary" /> e depois em <b>Adicionar à Tela de Início</b>.</p>
-            ) : manual ? (
-              <p className="mt-0.5 text-sm text-muted-foreground">Toque no menu <b>⋮</b> do navegador e escolha <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</p>
-            ) : (
-              <p className="mt-0.5 text-sm text-muted-foreground">Tenha o Cê Vai? na tela inicial para acessar seus lugares e experiências com mais facilidade.</p>
-            )}
+            <h2 id="install-title" className="font-display text-xl font-black">{ios ? "📲 Adicione o Cê Vai? à sua tela inicial" : "📲 Tenha o Cê Vai? no seu celular"}</h2>
+            {!ios && <p className="mt-1 text-sm text-muted-foreground">Instale o Cê Vai? para acessar seus lugares, experiências e descobertas de forma rápida.</p>}
           </div>
-          <button onClick={close} aria-label="Fechar" className="-mr-1 -mt-1 grid size-8 place-items-center rounded-full text-muted-foreground"><X size={16} /></button>
         </div>
-        <div className="mt-3 flex gap-2">
-          <Button variant="ghost" onClick={close} className="h-10 flex-1 rounded-full text-sm font-bold">Continuar no navegador</Button>
-          <Button onClick={() => (ios || manual ? close() : void install())} className="h-10 flex-1 rounded-full text-sm font-extrabold">{ios || manual ? "Entendi" : "Instalar Cê Vai?"}</Button>
-        </div>
+        {ios ? (
+          <ol className="mt-5 space-y-1.5 rounded-2xl bg-muted p-4 text-sm font-semibold">
+            <li className="flex items-center gap-1.5">1. Toque em Compartilhar <Share size={16} className="text-primary" /></li>
+            <li>2. Toque em ‘Adicionar à Tela de Início’</li>
+            <li>3. Toque em ‘Adicionar’</li>
+          </ol>
+        ) : help ? (
+          <div className="mt-5 rounded-2xl bg-muted p-4 text-sm font-semibold">
+            Toque nos <b>⋮</b> do Chrome e escolha <b>‘Instalar app’</b> ou <b>‘Adicionar à tela inicial’</b>.
+          </div>
+        ) : (
+          <Button onClick={() => void install()} className="mt-5 h-12 w-full rounded-full text-base font-extrabold">Instalar Cê Vai?</Button>
+        )}
+        <Button variant="ghost" onClick={close} className="mt-2 h-11 w-full rounded-full font-bold">Continuar no navegador</Button>
       </div>
     </div>
   );
