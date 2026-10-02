@@ -96,6 +96,13 @@ export function resolveFilter(key: string | undefined): { types?: string[]; text
 }
 
 const ALL_SUBS = GROUPS.flatMap((g) => g.subs.map((s) => ({ s, g })));
+/** Google types for "Todos": round-robin across groups so every group is represented (Nearby Search accepts max 50). */
+export const ALL_PLACE_TYPES: string[] = (() => {
+  const lists = GROUPS.map((g) => Array.from(new Set(g.subs.flatMap((s) => s.types ?? []))));
+  const out = new Set<string>();
+  for (let i = 0; out.size < 50 && lists.some((l) => l[i]); i++) for (const l of lists) { const t = l[i]; if (t && out.size < 50) out.add(t); }
+  return [...out];
+})();
 /** Label a Google place by its types. */
 export function categoryFromTypes(types: string[], name = ""): string {
   if (/\bfeira\b/i.test(name)) return "Feiras";

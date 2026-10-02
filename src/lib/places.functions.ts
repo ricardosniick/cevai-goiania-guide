@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveFilter, categoryFromTypes } from "./categories";
+import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES } from "./categories";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 export const GOIANIA = { lat: -16.6869, lng: -49.2648 };
@@ -120,6 +120,7 @@ const searchSchema = z.object({
   category: z.string().max(40).optional(),
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
+  radius: z.number().min(300).max(25000).optional(),
 });
 
 export const searchPlaces = createServerFn({ method: "POST" })
@@ -136,11 +137,11 @@ export const searchPlaces = createServerFn({ method: "POST" })
         headers: headers(SEARCH_MASK),
         body: JSON.stringify({
           textQuery,
-          pageSize: 12,
+          pageSize: 20,
           languageCode: "pt-BR",
           regionCode: "BR",
           ...(data.query && filter.types?.length === 1 ? { includedType: filter.types[0] } : {}),
-          locationBias: { circle: { center, radius: 20000 } },
+          locationBias: { circle: { center, radius: data.radius ? Math.min(data.radius * 1.5, 30000) : 20000 } },
         }),
       });
     } else {
@@ -148,17 +149,17 @@ export const searchPlaces = createServerFn({ method: "POST" })
         method: "POST",
         headers: headers(SEARCH_MASK),
         body: JSON.stringify({
-          includedTypes: filter.types?.length ? filter.types : ["restaurant", "cafe", "park", "tourist_attraction", "shopping_mall", "museum"],
-          maxResultCount: 12,
+          includedTypes: filter.types?.length ? filter.types.slice(0, 50) : ALL_PLACE_TYPES,
+          maxResultCount: 20,
           rankPreference: "POPULARITY",
           languageCode: "pt-BR",
           regionCode: "BR",
-          locationRestriction: { circle: { center, radius: 6000 } },
+          locationRestriction: { circle: { center, radius: data.radius ?? 6000 } },
         }),
       });
     }
     const forced = !data.query && filter.label ? filter.label : undefined;
-    const places = await Promise.all((result.places ?? []).slice(0, 12).map((p) => toSummary(p, 600, forced)));
+    const places = await Promise.all((result.places ?? []).slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       await context.supabase.from("places").upsert(
         places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_url: p.photoUrl, updated_at: new Date().toISOString() })),
