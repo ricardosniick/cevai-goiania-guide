@@ -3,7 +3,7 @@ import {
   ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2 } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
@@ -88,6 +88,17 @@ function CeVaiApp() {
     setToast(m);
     toastTimer.current = window.setTimeout(() => setToast(""), 2400);
   }, []);
+  // Every screen opens at its real top: no browser scroll restoration, no leftover window/inner scroll.
+  const screenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; }, []);
+  useLayoutEffect(() => {
+    const reset = () => {
+      window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+      screenRef.current?.querySelectorAll<HTMLElement>(".overflow-y-auto").forEach((el) => { el.scrollTop = 0; });
+      if (screenRef.current) screenRef.current.scrollTop = 0;
+    };
+    reset(); const id = requestAnimationFrame(reset); return () => cancelAnimationFrame(id);
+  }, [screen]);
   const go = useCallback((next: Screen, back = false) => { setDirection(back ? "back" : "forward"); setScreen(next); }, []);
 
   useEffect(() => {
@@ -139,10 +150,10 @@ function CeVaiApp() {
   const main = screen === "home" || screen === "map" || screen === "saved" || screen === "profile";
 
   return (
-    <main className="min-h-dvh bg-background">
+    <main className="h-dvh overflow-hidden bg-background">
       <div className="relative mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
         <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
-        <div key={screen} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
+        <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
           {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
           {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
           {screen === "signup" && <SignupScreen onBack={() => go("welcome", true)} onLogin={() => go("login")} onDone={(u) => { if (u) setUser(u); go("signup-done"); }} notify={notify} />}
