@@ -3,7 +3,7 @@ import {
   ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
   Lock, LogOut, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
@@ -31,7 +31,11 @@ type Experience = {
   place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
   scores: Array<{ criterion: string; score: number }>;
   photos: string[];
+  photoItems: Array<{ path: string; url: string }>;
 };
+
+/** Lets cards owned by the signed-in user open the edit form and refresh lists after changes. */
+const ManageCtx = createContext<{ user: User; notify: (m: string) => void; onEdit: (e: Experience) => void } | null>(null);
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -69,7 +73,7 @@ function CeVaiApp() {
   const [location, setLocation] = useState<LatLng | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null; stall?: Stall | null }>({ open: false, place: null });
+  const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null; stall?: Stall | null; edit?: Experience | null }>({ open: false, place: null });
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
   const queryClient = useQueryClient();
@@ -139,7 +143,7 @@ function CeVaiApp() {
           {screen === "profile" && <ProfileScreen user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} notify={notify} />}
         </div>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
-        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify("Experiência registrada!"); }} notify={notify} />}
+        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} editing={modal.edit ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify(modal.edit ? "Experiência atualizada!" : "Experiência registrada!"); }} notify={notify} />}
         {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
       </div>
     </main>
@@ -469,7 +473,7 @@ async function loadExperiences(filter: { userId?: string; placeId?: string; stal
     const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
     signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
   }
-  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u) }));
+  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
 }
 
 function useSaved(user: User | null) {
