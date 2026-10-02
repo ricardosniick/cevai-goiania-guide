@@ -14,6 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
+      experience_photos: {
+        Row: {
+          created_at: string
+          experience_id: string
+          id: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          experience_id: string
+          id?: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          experience_id?: string
+          id?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experience_photos_experience_id_fkey"
+            columns: ["experience_id"]
+            isOneToOne: false
+            referencedRelation: "experiences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experience_scores: {
+        Row: {
+          criterion: string
+          experience_id: string
+          id: string
+          score: number
+        }
+        Insert: {
+          criterion: string
+          experience_id: string
+          id?: string
+          score: number
+        }
+        Update: {
+          criterion?: string
+          experience_id?: string
+          id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experience_scores_experience_id_fkey"
+            columns: ["experience_id"]
+            isOneToOne: false
+            referencedRelation: "experiences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experiences: {
+        Row: {
+          category: string
+          comment: string | null
+          created_at: string
+          id: string
+          is_public: boolean
+          place_id: string
+          rating: number
+          user_id: string
+          visited_at: string
+          would_return: boolean
+        }
+        Insert: {
+          category: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          place_id: string
+          rating: number
+          user_id: string
+          visited_at?: string
+          would_return?: boolean
+        }
+        Update: {
+          category?: string
+          comment?: string | null
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          place_id?: string
+          rating?: number
+          user_id?: string
+          visited_at?: string
+          would_return?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiences_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["google_place_id"]
+          },
+        ]
+      }
+      places: {
+        Row: {
+          address: string | null
+          category: string | null
+          google_place_id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          photo_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          category?: string | null
+          google_place_id: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          category?: string | null
+          google_place_id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -43,6 +184,35 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      saved_places: {
+        Row: {
+          created_at: string
+          list: string
+          place_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          list: string
+          place_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          list?: string
+          place_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_places_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["google_place_id"]
+          },
+        ]
       }
     }
     Views: {
