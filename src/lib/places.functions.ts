@@ -191,3 +191,49 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       photos,
     };
   });
+
+/** Starts presence only after confirming, with the place's real Google data, that the category allows it and the device is inside the presence area. */
+export const startPresence = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    placeId: z.string().min(3).max(300),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy: z.number().min(0).max(100000),
+    mode: z.enum(["meet", "appear", "invisible"]),
+    interests: z.array(z.string().max(40)).max(8),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
+    if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
+    const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
+      `/places/v1/places/${encodeURIComponent(data.placeId)}`,
+      { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
+    );
+    const category = categoryOf(g);
+    if (!allowsPresence(category)) throw new Error("Este local não tem o recurso “Estou aqui”.");
+    if (!g.location) throw new Error("Não foi possível confirmar a localização deste local.");
+    const R = 6371000, rad = (x: number) => (x * Math.PI) / 180;
+    const dist = (a: number, b: number, c: number, d: number) => 2 * R * Math.asin(Math.sqrt(Math.sin(rad(c - a) / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(rad(d - b) / 2) ** 2));
+    let radius = presenceRadius(category);
+    if (g.viewport && category === "Parques") {
+      const half = dist(g.viewport.low.latitude, g.viewport.low.longitude, g.viewport.high.latitude, g.viewport.high.longitude) / 2;
+      radius = Math.min(1500, Math.max(radius, half));
+    }
+    const d = dist(data.lat, data.lng, g.location.latitude, g.location.longitude);
+    if (d > radius + Math.min(data.accuracy, 50)) throw new Error("Você precisa estar no local para usar “Estou aqui”.");
+    const allowed = new Set(presenceInterests(category));
+    const interests = data.mode === "meet" ? data.interests.filter((i) => allowed.has(i)) : [];
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    await supabaseAdmin.from("place_presence").delete().eq("user_id", context.userId);
+    const now = Date.now();
+    const { error } = await supabaseAdmin.from("place_presence").insert({
+      user_id: context.userId, place_id: g.id, mode: data.mode, visible: data.mode !== "invisible", interests,
+      status: null, started_at: new Date(now).toISOString(), expires_at: new Date(now + 3 * 3600 * 1000).toISOString(),
+    });
+    if (error) { console.error(error); throw new Error("Não foi possível marcar presença."); }
+    await supabaseAdmin.rpc("cleanup_presence");
+    return { radius };
+  });

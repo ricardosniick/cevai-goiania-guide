@@ -56,6 +56,68 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          request_id: string
+          sender: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          request_id: string
+          sender: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          request_id?: string
+          sender?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "connection_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      connection_requests: {
+        Row: {
+          created_at: string
+          from_presence_started: string
+          from_user: string
+          id: string
+          place_id: string
+          status: string
+          to_user: string
+        }
+        Insert: {
+          created_at?: string
+          from_presence_started: string
+          from_user: string
+          id?: string
+          place_id: string
+          status?: string
+          to_user: string
+        }
+        Update: {
+          created_at?: string
+          from_presence_started?: string
+          from_user?: string
+          id?: string
+          place_id?: string
+          status?: string
+          to_user?: string
+        }
+        Relationships: []
+      }
       experience_photos: {
         Row: {
           created_at: string
@@ -215,6 +277,8 @@ export type Database = {
       place_presence: {
         Row: {
           expires_at: string
+          interests: string[]
+          mode: string
           place_id: string
           started_at: string
           status: string | null
@@ -223,6 +287,8 @@ export type Database = {
         }
         Insert: {
           expires_at?: string
+          interests?: string[]
+          mode?: string
           place_id: string
           started_at?: string
           status?: string | null
@@ -231,6 +297,8 @@ export type Database = {
         }
         Update: {
           expires_at?: string
+          interests?: string[]
+          mode?: string
           place_id?: string
           started_at?: string
           status?: string | null
@@ -339,11 +407,77 @@ export type Database = {
           },
         ]
       }
+      user_blocks: {
+        Row: {
+          blocked: string
+          blocker: string
+          created_at: string
+        }
+        Insert: {
+          blocked: string
+          blocker: string
+          created_at?: string
+        }
+        Update: {
+          blocked?: string
+          blocker?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_reports: {
+        Row: {
+          created_at: string
+          id: string
+          place_id: string | null
+          reason: string
+          reported: string
+          reporter: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          place_id?: string | null
+          reason: string
+          reported: string
+          reporter: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          place_id?: string | null
+          reason?: string
+          reported?: string
+          reporter?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      chat_messages_for: {
+        Args: { _request_id: string }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          mine: boolean
+        }[]
+      }
+      cleanup_presence: { Args: never; Returns: undefined }
+      end_presence: { Args: never; Returns: undefined }
+      my_connections: {
+        Args: { _place_id: string }
+        Returns: {
+          id: string
+          incoming: boolean
+          other_id: string
+          other_name: string
+          status: string
+        }[]
+      }
       place_experience_stats: {
         Args: { _place_ids: string[] }
         Returns: {
@@ -359,6 +493,28 @@ export type Database = {
           is_me: boolean
           status: string
         }[]
+      }
+      place_people_v2: {
+        Args: { _place_id: string }
+        Returns: {
+          first_name: string
+          interests: string[]
+          is_me: boolean
+          mode: string
+          user_id: string
+        }[]
+      }
+      respond_connection: {
+        Args: { _action: string; _id: string }
+        Returns: undefined
+      }
+      send_chat_message: {
+        Args: { _body: string; _request_id: string }
+        Returns: undefined
+      }
+      send_connection: {
+        Args: { _place_id: string; _to: string }
+        Returns: undefined
       }
       stall_experience_stats: {
         Args: { _stall_ids: string[] }

@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1790885130295,
-      "tag": "0000_create_profiles",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1790943594568,
-      "tag": "0001_experiences_and_places",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1790945403839,
-      "tag": "0002_place_experience_stats",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1790945703935,
-      "tag": "0003_fairs_stalls_books",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1790947342675,
-      "tag": "0004_place_presence",
+      "when": 1790949695633,
+      "tag": "0000_presence_connections_chat",
       "breakpoints": true
     }
   ]
