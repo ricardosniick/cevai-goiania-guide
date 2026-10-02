@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker } from "@/components/cevai/MapView";
-import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS } from "@/lib/categories";
+import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
 type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile" | "categories";
 type MainScreen = "home" | "map" | "saved" | "profile";
@@ -522,7 +522,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
             <div className="rounded-2xl border border-border bg-muted/60 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avaliação do Google</p><p className="mt-1 text-sm font-black"><GoogleRating rating={p.rating} count={p.ratingCount} size="md" /></p><p className="mt-1 text-[10px] text-muted-foreground">Informação externa</p></div>
             <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê Vai?</p>{(() => { const st = stats.data?.[p.id]; return st?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(st.avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{st.count} {st.count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê Vai?.</p>; })()}</div>
           </div>
-          {user && <PresencePanel user={user} place={p} notify={notify} />}
+          {user && allowsPresence(p.category) && <PresencePanel user={user} place={p} notify={notify} />}
         </div>
         <div className="sticky top-0 z-10 mt-4 flex border-b border-border bg-background px-5">
           {(isFair(p.category, p.name) ? ["Sobre", "Barraquinhas", "Experiências", "Fotos"] as const : ["Sobre", "Experiências", "Fotos"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`flex-1 border-b-2 py-3 text-[13px] font-extrabold ${tab === t ? "border-secondary text-primary" : "border-transparent text-muted-foreground"}`}>{t}</button>)}
