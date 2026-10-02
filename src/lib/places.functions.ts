@@ -8,7 +8,7 @@ export const GOIANIA = { lat: -16.6869, lng: -49.2648 };
 const CATEGORY_TYPES: Record<string, string[]> = {
   Restaurantes: ["restaurant"],
   Cafés: ["cafe", "coffee_shop"],
-  Parques: ["park"],
+  Parques: ["park", "city_park", "national_park", "state_park", "garden", "botanical_garden"],
   Hotéis: ["lodging"],
   Lojas: ["shopping_mall", "store"],
   Cultura: ["museum", "art_gallery", "performing_arts_theater", "cultural_center"],
