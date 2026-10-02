@@ -352,6 +352,7 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
   const places = usePlaces(user, center, category, query);
   const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date()).toUpperCase();
   const [first, ...rest] = places.data ?? [];
+  const stats = usePlaceStats(user, (places.data ?? []).map((p) => p.id));
   return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
     <header className="flex items-start justify-between px-5">
       <div><p className="text-[11px] font-extrabold tracking-[0.14em] text-secondary">{weekday}, GOIÂNIA</p><h1 className="mt-1 font-display text-[1.9rem] font-black leading-tight">Cê vai onde?</h1></div>
@@ -370,7 +371,7 @@ function HomeScreen({ user, center, category, onCategory, onOpen, onLogin }: { u
       {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
       {first && <button onClick={() => onOpen(first.id)} className="mx-5 mt-3 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left shadow-md">
         <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
-        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-3 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><span>· {formatKm(distanceKm(center, first))}</span></p><p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p></div>
+        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><span>· {formatKm(distanceKm(center, first))}</span></p><p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p></div>
       </button>}
       <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} stat={stats.data?.[p.id]} onOpen={() => onOpen(p.id)} />)}</div>
       {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
