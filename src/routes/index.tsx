@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker } from "@/components/cevai/MapView";
+import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
 type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile" | "categories";
