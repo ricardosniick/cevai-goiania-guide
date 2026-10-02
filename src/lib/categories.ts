@@ -49,6 +49,13 @@ export const GROUPS: Group[] = [
     { key: "museus", label: "Museus", emoji: "🏛️", types: ["museum"] },
     { key: "centros", label: "Centros culturais", emoji: "🎨", types: ["cultural_center"] },
     { key: "eventos", label: "Eventos", emoji: "🎟️", types: ["event_venue"] },
+    { key: "shows", label: "Shows", emoji: "🎤", text: "casa de shows" },
+  ] },
+  { key: "esporte", label: "Esporte", chip: "Esporte", emoji: "🎾", color: "#0E7C86", subs: [
+    { key: "tenis", label: "Quadras de tênis", emoji: "🎾", text: "quadra de tênis" },
+    { key: "beach", label: "Beach tennis", emoji: "🏖️", text: "beach tennis" },
+    { key: "quadras", label: "Quadras esportivas", emoji: "🏟️", types: ["sports_complex", "athletic_field"] },
+    { key: "clubes", label: "Clubes esportivos", emoji: "🏅", types: ["sports_club"] },
   ] },
   { key: "hospedagem", label: "Hospedagem", chip: "Hospedagem", emoji: "🏨", color: "#2F6FB0", subs: [
     { key: "hoteis", label: "Hotéis", emoji: "🏨", types: ["hotel", "lodging"] },
@@ -65,7 +72,7 @@ export const GROUPS: Group[] = [
 GROUPS[1]!.subs = [GROUPS[0]!.subs[1]!];
 
 export const HOME_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras"];
-export const MAP_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras", "lazer", "hospedagem", "conhecimento"];
+export const MAP_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras", "lazer", "esporte", "hospedagem", "conhecimento"];
 
 export function findFilter(key: string): { group: Group; sub: Sub | null } | null {
   for (const g of GROUPS) {
@@ -92,6 +99,8 @@ const ALL_SUBS = GROUPS.flatMap((g) => g.subs.map((s) => ({ s, g })));
 /** Label a Google place by its types. */
 export function categoryFromTypes(types: string[], name = ""): string {
   if (/\bfeira\b/i.test(name)) return "Feiras";
+  if (/beach\s*tennis/i.test(name)) return "Beach tennis";
+  if (types.some((t) => t.includes("tennis"))) return "Quadras de tênis";
   for (const { s } of ALL_SUBS) if (s.types?.some((t) => types.includes(t))) return s.label;
   if (types.some((t) => t.includes("restaurant"))) return "Restaurantes";
   if (types.some((t) => t.includes("clinic") || t === "doctor")) return "Clínicas";
@@ -146,6 +155,27 @@ export const STALL_KINDS = [
   { kind: "Hortifrúti", emoji: "🥬" }, { kind: "Outros", emoji: "🛖" },
 ];
 
-/** "Estou aqui" só existe em locais de convivência social; qualquer outra categoria não exibe o recurso. */
-export const PRESENCE_CATEGORIES = new Set(["Bares", "Restaurantes", "Eventos", "Parques"]);
+/** "Estou aqui" só existe em locais de lazer, esporte e convivência social; qualquer outra categoria não exibe o recurso. */
+export const PRESENCE_CATEGORIES = new Set(["Bares", "Restaurantes", "Eventos", "Shows", "Parques", "Quadras de tênis", "Beach tennis", "Quadras esportivas", "Clubes esportivos"]);
 export const allowsPresence = (category: string | null | undefined) => !!category && PRESENCE_CATEGORIES.has(category);
+
+/** Raio (m) da área de presença por tipo de local. O servidor pode ampliar para parques grandes usando a área do Google. */
+export function presenceRadius(category: string): number {
+  if (category === "Parques") return 600;
+  if (category === "Eventos" || category === "Shows") return 300;
+  if (category.startsWith("Quadra") || category === "Beach tennis" || category === "Clubes esportivos") return 250;
+  return 120;
+}
+
+const BAR = ["🍻 Cerveja", "⚽ Futebol", "🎵 Música", "🗣️ Conversar", "🎤 Karaokê"];
+const PARK = ["🏃 Corrida", "🚶 Caminhada", "🚴 Bike", "🐶 Pets", "📸 Fotografia"];
+const COURT = ["🎾 Jogar", "🏆 Competição", "🤝 Procurando parceiro", "🏋️ Treino"];
+const EVENT = ["🎵 Música", "💃 Dançar", "🎤 Artista", "🍻 Curtir"];
+const FOOD = ["🍽️ Comer bem", "🍷 Vinho", "🗣️ Conversar", "🎵 Música"];
+export function presenceInterests(category: string): string[] {
+  if (category === "Bares") return BAR;
+  if (category === "Parques") return PARK;
+  if (category === "Eventos" || category === "Shows") return EVENT;
+  if (category === "Restaurantes") return FOOD;
+  return COURT;
+}
