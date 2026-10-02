@@ -183,8 +183,8 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   return <section className="relative h-full min-h-dvh overflow-hidden bg-primary">
-    <img src={welcomeArt.url} className="absolute inset-0 h-full w-full object-cover object-top" alt="Cê Vai? — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
-    <div className="absolute inset-x-0 bottom-0 h-[38%] bg-gradient-to-t from-primary via-primary/70 to-transparent" />
+    <img src={welcomeArt.url} className="absolute inset-x-0 top-0 h-auto min-h-[70%] w-full object-cover object-top" alt="Cê Vai? — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
+    <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-primary via-primary/80 to-transparent" />
     <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="space-y-3">
         <Button disabled={!ready} onClick={onSignup} className="h-[52px] w-full rounded-full bg-secondary text-base font-extrabold text-secondary-foreground shadow-lg hover:bg-secondary/90">Criar conta</Button>
