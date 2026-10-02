@@ -219,7 +219,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      place_experience_stats: {
+        Args: { _place_ids: string[] }
+        Returns: {
+          avg_rating: number
+          experience_count: number
+          place_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
