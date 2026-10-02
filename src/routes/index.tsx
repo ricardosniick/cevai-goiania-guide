@@ -400,12 +400,12 @@ function GoogleRating({ rating, count, size = "sm" }: { rating: number | null; c
   if (!rating) return <span className="text-muted-foreground">Sem nota no Google</span>;
   return <span className="inline-flex items-center gap-1"><Star size={size === "md" ? 14 : 11} className="fill-secondary text-secondary" />{fmt1(rating)}<span className="rounded-sm bg-muted px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-muted-foreground">Google</span>{count ? <span className="font-semibold text-muted-foreground">({count})</span> : null}</span>;
 }
-function CeVaiRating({ stat }: { stat?: PlaceStat }) {
+function CeVaiRating({ stat }: { stat?: PlaceStat | undefined }) {
   if (!stat?.count) return <span className="text-[11px] font-semibold italic text-muted-foreground">Ainda sem experiências no Cê Vai?</span>;
   return <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-primary"><Heart size={11} className="fill-secondary text-secondary" />{fmt1(stat.avg)} · Cê Vai? · {stat.count} {stat.count === 1 ? "experiência" : "experiências"}</span>;
 }
 
-function PlaceRow({ place, center, stat, onOpen }: { place: PlaceSummary; center: LatLng; stat?: PlaceStat; onOpen: () => void }) {
+function PlaceRow({ place, center, stat, onOpen }: { place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; onOpen: () => void }) {
   return <button onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left shadow-sm">
     <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
     <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><span>· {formatKm(distanceKm(center, place))}</span></p><CeVaiRating stat={stat} /></div>
