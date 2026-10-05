@@ -796,6 +796,7 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
 /* ---------------- Registrar experiência ---------------- */
 
 function ExperienceModal({ user, center, location, initialPlace, initialStall, editing = null, onLocate, onClose, onSaved, notify }: { user: User; center: LatLng; location: LatLng | null; initialPlace: PlaceSummary | null; initialStall: Stall | null; editing?: Experience | null; onLocate: () => void; onClose: () => void; onSaved: () => void; notify: (m: string) => void }) {
+  const ensurePlaceFn = useServerFn(ensurePlace);
   const [step, setStep] = useState<"where" | "how">(initialPlace ? "how" : "where");
   const [mode, setMode] = useState<"near" | "search" | "map">("near");
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
