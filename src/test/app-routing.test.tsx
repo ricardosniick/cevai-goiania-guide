@@ -15,6 +15,12 @@ function renderAt(path: string) {
   return render(<RouterProvider router={router} />);
 }
 
+// The root route renders the full document (<html>/<head>/<body>), which React 19 hoists
+// into the real document instead of the test container, so check both places.
+function painted(container: HTMLElement) {
+  return container.childElementCount > 0 || document.head.childElementCount > 0;
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -26,7 +32,7 @@ describe("App routing", () => {
   it("renders the index route", async () => {
     const { container } = renderAt("/");
 
-    await waitFor(() => expect(container.firstChild).not.toBeNull(), { timeout: 8000 });
+    await waitFor(() => expect(painted(container)).toBe(true));
   });
 
   it("renders the not-found route", async () => {
@@ -34,6 +40,6 @@ describe("App routing", () => {
 
     const { container } = renderAt("/this-route-does-not-exist");
 
-    await waitFor(() => expect(container.firstChild).not.toBeNull(), { timeout: 8000 });
+    await waitFor(() => expect(painted(container)).toBe(true));
   });
 });
