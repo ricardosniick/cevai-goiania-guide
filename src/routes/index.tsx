@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart, Image as ImageIcon,
+  ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2 } from "lucide-react";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
@@ -16,15 +16,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { LIST_LABELS, type Screen, type MainScreen, type LatLng, type SavedList, type Stall, type Experience } from "@/components/cevai/types";
 import { ManageCtx } from "@/components/cevai/manage-context";
 import { Logo } from "@/components/cevai/Logo";
+import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, ErrorBox, ListError, Stars } from "@/components/cevai/shared";
+import { usePlaces } from "@/hooks/usePlaces";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { friendlyError } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
-import { searchPlaces, getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
-import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
+import { HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
 const emojiOf = emojiOfLabel;
 
@@ -297,71 +299,6 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
   </AuthLayout>;
 }
 
-/* ---------------- Shared pieces ---------------- */
-
-function usePlaces(user: User | null, center: LatLng, category: string | null, query: string, radius?: number, ready = true) {
-  const search = useServerFn(searchPlaces);
-  // ~1km grid + radius bucket: nearby repeat searches reuse the cached result instead of calling Google again.
-  const lat = Math.round(center.lat * 100) / 100; const lng = Math.round(center.lng * 100) / 100;
-  const r = radius ? Math.min(25000, Math.max(300, Math.round(radius / 500) * 500)) : undefined;
-  return useQuery({
-    queryKey: ["places", category, query, lat, lng, r ?? null],
-    queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng, ...(r ? { radius: r } : {}) } }),
-    enabled: !!user && ready,
-    staleTime: 10 * 60 * 1000,
-    retry: false,
-  });
-}
-
-function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares reais, ver fotos e registrar experiências." }: { onLogin: () => void; text?: string }) {
-  return <div className="mx-5 mt-6 rounded-2xl bg-primary p-6 text-primary-foreground">
-    <Lock size={22} className="text-secondary" />
-    <p className="mt-3 font-display text-lg font-black">Falta pouco para descobrir</p>
-    <p className="mt-1 text-sm text-primary-foreground/80">{text}</p>
-    <Button onClick={onLogin} className="mt-5 h-11 rounded-full bg-secondary px-6 font-extrabold text-secondary-foreground hover:bg-secondary/90">Entrar ou criar conta</Button>
-  </div>;
-}
-
-function CategoryChips({ value, onChange, chips, withAll = false, onAll, className = "" }: { value: string | null; onChange: (c: string | null) => void; chips: string[]; withAll?: boolean; onAll?: () => void; className?: string }) {
-  const extra = value && !chips.includes(value) ? [value] : [];
-  return <div className={`flex w-full min-w-0 flex-nowrap gap-2 overflow-x-auto overscroll-x-contain scroll-smooth whitespace-nowrap py-1 pl-5 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [touch-action:pan-x_pan-y] [&::-webkit-scrollbar]:hidden ${className}`}>
-    {withAll && <button onClick={() => onChange(null)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold shadow-sm ${value === null ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>Todos</button>}
-    {[...extra, ...chips].map((k) => <button key={k} onClick={() => onChange(value === k ? null : k)} className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-sm transition ${value === k ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}><span>{filterEmoji(k)}</span>{filterLabel(k)}</button>)}
-    {onAll && <button onClick={onAll} className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary/40 px-4 py-2 text-sm font-extrabold text-primary">Ver todas<ChevronRight size={14} /></button>}
-    <span aria-hidden className="w-3 shrink-0" />
-  </div>;
-}
-
-function CategoriesScreen({ value, onBack, onPick }: { value: string | null; onBack: () => void; onPick: (k: string) => void }) {
-  return <section className="h-full overflow-y-auto pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
-    <div className="flex items-center gap-2 px-3"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full"><ArrowLeft /></Button><h1 className="font-display text-2xl font-black">Todas as categorias</h1></div>
-    <div className="mt-2 space-y-6 px-5">
-      {GROUPS.filter((g) => g.key !== "cafes-g").map((g) => <div key={g.key}>
-        <button onClick={() => onPick(g.key)} className="flex w-full items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: g.color }}>{g.emoji} {g.label}</h2><span className="text-[11px] font-bold text-muted-foreground">Ver tudo</span></button>
-        <div className="mt-2 grid grid-cols-2 gap-2">{g.subs.map((sub) => <button key={sub.key} onClick={() => onPick(sub.key)} className={`flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm font-bold shadow-sm ${value === sub.key ? "bg-primary text-primary-foreground" : "bg-card"}`}><span className="text-lg">{sub.emoji}</span><span className="min-w-0 truncate">{sub.label}</span></button>)}</div>
-      </div>)}
-      <p className="rounded-2xl bg-muted p-4 text-xs text-muted-foreground">📚 Livros ficam no seu Perfil — eles não são lugares do mapa.</p>
-    </div>
-  </section>;
-}
-
-function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
-  // Old stored Google URLs expire: on load failure fall back to the existing "sem foto" look.
-  const [broken, setBroken] = useState<string | null>(null);
-  if (src && broken === src) src = null;
-  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(src)} className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
-}
-
-function Skeleton({ className }: { className: string }) { return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />; }
-
-function ErrorBox({ error }: { error: unknown }) {
-  return <div className="mx-5 mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error instanceof Error ? error.message : "Não foi possível carregar os lugares."}</div>;
-}
-
-function ListError({ onRetry }: { onRetry: () => void }) {
-  return <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Não foi possível carregar. <button onClick={onRetry} className="font-bold underline">Tentar de novo</button></div>;
-}
-
 /* ---------------- Explorar ---------------- */
 
 function HomeScreen({ user, center, category, onCategory, onOpen, onLogin, onAll }: { user: User | null; center: LatLng; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void }) {
@@ -613,10 +550,6 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
       <Button onClick={() => onRegister(p)} className="h-12 flex-[1.3] rounded-full bg-secondary font-extrabold text-secondary-foreground hover:bg-secondary/90"><Plus size={18} />Eu fui</Button>
     </div>}
   </section>;
-}
-
-function Stars({ value, size = 14 }: { value: number; size?: number }) {
-  return <span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <Star key={n} size={size} className={n <= value ? "fill-secondary text-secondary" : "text-border"} />)}</span>;
 }
 
 function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experience; own: boolean; showPlace?: boolean; onOpen?: () => void }) {
