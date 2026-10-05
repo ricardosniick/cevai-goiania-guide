@@ -682,7 +682,7 @@ function ExperienceMenu({ exp }: { exp: Experience }) {
       // Photos and criteria rows are removed by the database together with the experience; the place stays.
       const { error } = await supabase.from("experiences").delete().eq("id", exp.id).eq("user_id", ctx.user.id);
       if (error) return ctx.notify(friendlyError(error, "Não foi possível excluir.", "delete experience"));
-      if (exp.photoItems.length) { const rm = await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path)); if (rm.error) console.error("[erro] remove photo files", rm.error); }
+      if (exp.photoItems.length) { const rm = await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path)); if (rm.error) console.error("[erro] remove photo files", exp.photoItems.map((p) => p.path), rm.error); }
       refresh(); ctx.notify("Experiência excluída.");
     } catch (e) { ctx.notify(friendlyError(e, "Não foi possível excluir.", "delete experience")); } finally { setBusy(false); setConfirm(false); }
   };
