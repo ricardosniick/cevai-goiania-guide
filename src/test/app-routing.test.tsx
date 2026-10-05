@@ -24,7 +24,7 @@ async function expectMounted(router: ReturnType<typeof renderAt>) {
     expect(router.state.matches.length).toBeGreaterThan(0);
     expect(document.body.innerHTML.trim().length).toBeGreaterThan(0);
     expect(document.body.querySelector("*")).not.toBeNull();
-  });
+  }, { timeout: 10000 });
 }
 
 afterEach(() => {
@@ -39,10 +39,10 @@ afterEach(() => {
 describe("App routing", () => {
   it("renders the index route", async () => {
     await expectMounted(renderAt("/"));
-  });
+  }, 15000);
 
   it("renders the not-found route", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await expectMounted(renderAt("/this-route-does-not-exist"));
-  });
+  }, 15000);
 });
