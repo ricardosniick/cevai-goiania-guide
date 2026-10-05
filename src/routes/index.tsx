@@ -16,6 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { LIST_LABELS, type Screen, type MainScreen, type LatLng, type SavedList, type Stall, type Experience } from "@/components/cevai/types";
 import { ManageCtx } from "@/components/cevai/manage-context";
 import { Logo } from "@/components/cevai/Logo";
+import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, ErrorBox, ListError, Stars } from "@/components/cevai/shared";
+import { usePlaces } from "@/hooks/usePlaces";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { friendlyError } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
