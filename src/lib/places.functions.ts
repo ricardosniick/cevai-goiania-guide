@@ -17,6 +17,7 @@ export type PlaceSummary = {
   rating: number | null;
   ratingCount: number | null;
   photoUrl: string | null;
+  photoName: string | null;
   photoAttribution: string | null;
 };
 
@@ -51,14 +52,33 @@ type GPlace = {
 
 const RATE_MSG = "Muitas tentativas. Tente de novo em alguns instantes.";
 /** Atomic per-user limit (SQL advisory lock). Throws a friendly message when exceeded. */
-async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
+async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG, failClosed = false) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
-  if (error) { console.error("rate limit check failed", error); return; }
+  if (error) {
+    console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error);
+    if (failClosed) throw new Error(message);
+    return;
+  }
   if (data === false) throw new Error(message);
 }
 
-const photoCache = new Map<string, string>();
+/** Bounded photo URL cache: max 500 entries, 30-min validity, oldest evicted first. */
+const PHOTO_CACHE_MAX = 500;
+const PHOTO_CACHE_TTL = 30 * 60 * 1000;
+const photoCache = new Map<string, { url: string; at: number }>();
+function cacheGet(key: string): string | null {
+  const hit = photoCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > PHOTO_CACHE_TTL) { photoCache.delete(key); return null; }
+  return hit.url;
+}
+function cacheSet(key: string, url: string) {
+  photoCache.delete(key);
+  photoCache.set(key, { url, at: Date.now() });
+  while (photoCache.size > PHOTO_CACHE_MAX) { const oldest = photoCache.keys().next().value; if (oldest === undefined) break; photoCache.delete(oldest); }
+}
+const PHOTO_NAME_RE = /^places\/[^/]+\/photos\/[^/]+$/;
 
 function headers(fieldMask?: string) {
   const lovableKey = process.env["LOVABLE_API_KEY"];
@@ -85,13 +105,13 @@ async function gateway<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 async function photoUrl(photo: GPhoto | undefined, width = 800): Promise<string | null> {
-  if (!photo?.name || !/^places\/[^/]+\/photos\/[^/]+$/.test(photo.name)) return null;
+  if (!photo?.name || !PHOTO_NAME_RE.test(photo.name)) return null;
   const key = `${photo.name}:${width}`;
-  const cached = photoCache.get(key);
+  const cached = cacheGet(key);
   if (cached) return cached;
   try {
     const data = await gateway<{ photoUri?: string }>(`/places/v1/${photo.name}/media?maxWidthPx=${width}&skipHttpRedirect=true`, { headers: headers() });
-    if (data.photoUri) photoCache.set(key, data.photoUri);
+    if (data.photoUri) cacheSet(key, data.photoUri);
     return data.photoUri ?? null;
   } catch {
     return null;
@@ -115,6 +135,7 @@ async function toSummary(place: GPlace, width = 600, forcedCategory?: string): P
     rating: place.rating ?? null,
     ratingCount: place.userRatingCount ?? null,
     photoUrl: await photoUrl(first, width),
+    photoName: first?.name && PHOTO_NAME_RE.test(first.name) ? first.name : null,
     photoAttribution: first?.authorAttributions?.[0]?.displayName ?? null,
   };
 }
@@ -174,7 +195,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("places").upsert(
-        places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_url: p.photoUrl, updated_at: new Date().toISOString() })),
+        places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_name: p.photoName, updated_at: new Date().toISOString() })),
         { onConflict: "google_place_id" },
       );
     }
@@ -194,7 +215,7 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       return url ? { url, attribution: p.authorAttributions?.[0]?.displayName ?? null } : null;
     }))).filter((p): p is { url: string; attribution: string | null } => p !== null);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_url: summary.photoUrl, updated_at: new Date().toISOString() }, { onConflict: "google_place_id" });
+    await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_name: summary.photoName, updated_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     return {
       ...summary,
       address: place.formattedAddress ?? summary.address,
@@ -207,6 +228,24 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
     };
   });
 
+/** Turns stored Google photo names into fresh display URLs (cover size). Missing/failed ones are simply omitted. */
+export const resolvePlacePhotos = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(50) }).parse(data))
+  .handler(async ({ data, context }) => {
+    const names = [...new Set(data.names)];
+    const out: Record<string, string> = {};
+    if (!names.length) return out;
+    if (names.some((n) => !cacheGet(`${n}:600`))) {
+      try { await rateLimit(context.userId, "photos", 60, 60); } catch { /* over limit: show "sem foto" / old URL instead */
+        names.forEach((n) => { const c = cacheGet(`${n}:600`); if (c) out[n] = c; });
+        return out;
+      }
+    }
+    await Promise.all(names.map(async (n) => { const u = await photoUrl({ name: n }, 600); if (u) out[n] = u; }));
+    return out;
+  });
+
 /** Makes sure a place row exists before user content references it. Client sends only the id; data comes from Google. */
 export const ensurePlace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -214,7 +253,7 @@ export const ensurePlace = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: existing } = await context.supabase.from("places").select("google_place_id").eq("google_place_id", data.placeId).maybeSingle();
     if (existing) return { ok: true };
-    await rateLimit(context.userId, "ensure_place", 20, 60);
+    await rateLimit(context.userId, "ensure_place", 20, 60, RATE_MSG, true);
     const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
     if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

@@ -14,7 +14,7 @@ import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { searchPlaces, getPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { searchPlaces, getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
@@ -152,7 +152,7 @@ function CeVaiApp() {
   return (
     <main className="h-dvh overflow-hidden bg-background">
       <div className="relative mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
-        <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
+        <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
         <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
           {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
           {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
@@ -365,7 +365,10 @@ function CategoriesScreen({ value, onBack, onPick }: { value: string | null; onB
 }
 
 function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
-  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
+  // Old stored Google URLs expire: on load failure fall back to the existing "sem foto" look.
+  const [broken, setBroken] = useState<string | null>(null);
+  if (src && broken === src) src = null;
+  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(src)} className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
 }
 
 function Skeleton({ className }: { className: string }) { return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />; }
@@ -494,7 +497,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
 /* ---------------- Data: experiences & saved ---------------- */
 
 async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }): Promise<Experience[]> {
-  let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
+  let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url, photo_name), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
   if (filter.userId) q = q.eq("user_id", filter.userId);
   if (filter.placeId) q = q.eq("place_id", filter.placeId);
   if (filter.stallId) q = q.eq("stall_id", filter.stallId);
@@ -506,7 +509,20 @@ async function loadExperiences(filter: { userId?: string; placeId?: string; stal
     const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
     signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
   }
-  return (data ?? []).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
+  return (await withFreshPhotos(data ?? [])).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
+}
+
+/** Rows joined with `places`: replace photo_url with a fresh URL generated from photo_name (old rows keep their stored URL). */
+async function withFreshPhotos<T extends { place: unknown }>(rows: T[]): Promise<T[]> {
+  const names = [...new Set(rows.map((r) => (r.place as { photo_name?: string | null } | null)?.photo_name).filter((n): n is string => !!n))].slice(0, 50);
+  if (!names.length) return rows;
+  let urls: Record<string, string> = {};
+  try { urls = await resolvePlacePhotos({ data: { names } }); } catch { /* keep stored URLs / "sem foto" */ }
+  return rows.map((r) => {
+    const p = r.place as { photo_name?: string | null; photo_url: string | null } | null;
+    if (!p?.photo_name || !urls[p.photo_name]) return r;
+    return { ...r, place: { ...p, photo_url: urls[p.photo_name] } };
+  });
 }
 
 function useSaved(user: User | null) {
@@ -514,9 +530,9 @@ function useSaved(user: User | null) {
     queryKey: ["saved", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase.from("saved_places").select("place_id, list, created_at, place:places(name, address, category, photo_url, lat, lng)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("saved_places").select("place_id, list, created_at, place:places(name, address, category, photo_url, photo_name, lat, lng)").order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return withFreshPhotos(data ?? []);
     },
   });
 }
