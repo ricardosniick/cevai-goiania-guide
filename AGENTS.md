@@ -16,3 +16,4 @@
 - Drizzle migration history starts fresh after the remix; tables created before it already exist in the database. Why: copied migrations didn't match the new database.
 - "Situação agora" is written only by the `postSituation` server function after a Google-verified geofence check (10-min rate limit per user/place) and read via `place_situation_now()`; rows persist after 2h expiry for history. Why: clients cannot fake on-site reports. Situation sets live in `src/lib/categories.ts` (`SITUATION_OPTIONS`, `situationKind`).
 - Only server functions write `public.places`, always with Google-sourced data (`ensurePlace` before user content references a place); why: clients could overwrite place data for everyone.
+- Per-user limits on Google-calling server functions go through `hit_rate_limit()` (advisory-locked SQL, service_role only) via `rateLimit()` in places.functions.ts; why: atomic under concurrent requests and keeps Google costs bounded.
