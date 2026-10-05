@@ -129,8 +129,8 @@ function CeVaiApp() {
   const main = screen === "home" || screen === "map" || screen === "saved" || screen === "profile";
 
   return (
-    <main className="h-dvh overflow-hidden bg-background">
-      <div className="relative mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
+    <main className="fixed inset-0 overflow-hidden bg-background">
+      <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
         <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
         <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
           {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
