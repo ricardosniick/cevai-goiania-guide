@@ -29,6 +29,13 @@
       "when": 1791225574094,
       "tag": "0003_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791225802376,
+      "tag": "0004_places_photo_name",
+      "breakpoints": true
     }
   ]
 }
