@@ -227,11 +227,13 @@ function GoogleButton({ onSuccess, notify }: { onSuccess: (u: User) => void; not
   return <>
     <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div>
     <Button variant="outline" onClick={async () => {
-      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-      if (r.error) return notify("Não foi possível entrar com Google.");
-      if (r.redirected) return;
-      const { data } = await supabase.auth.getUser();
-      if (data.user) onSuccess(data.user);
+      try {
+        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+        if (r.error) return notify(friendlyError(r.error, "Não foi possível entrar com Google.", "google"));
+        if (r.redirected) return;
+        const { data } = await supabase.auth.getUser();
+        if (data.user) onSuccess(data.user);
+      } catch (e) { notify(friendlyError(e, "Não foi possível entrar com Google.", "google")); }
     }} className="h-12 w-full rounded-full border-border bg-card font-bold text-foreground"><span className="mr-2 font-black text-secondary">G</span>Continuar com Google</Button>
   </>;
 }
@@ -240,10 +242,11 @@ function LoginScreen({ onBack, onSignup, onForgot, onSuccess, notify }: { onBack
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [loading, setLoading] = useState(false);
   const submit = async () => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
-    if (error) return notify(error.message.includes("confirm") ? "Confirme seu e-mail antes de entrar." : "E-mail ou senha incorretos.");
-    onSuccess(data.user);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) return notify(error.message.includes("confirm") ? "Confirme seu e-mail antes de entrar." : friendlyError(error, "E-mail ou senha incorretos.", "login"));
+      onSuccess(data.user);
+    } catch (e) { notify(friendlyError(e, "Não foi possível entrar.", "login")); } finally { setLoading(false); }
   };
   return <AuthLayout onBack={onBack}>
     <h1 className="mt-8 font-display text-[1.75rem] font-black leading-tight">Que bom te ver por aqui.</h1>
