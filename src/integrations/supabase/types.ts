@@ -419,6 +419,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_events: {
+        Row: {
+          bucket: string
+          created_at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: []
+      }
       saved_places: {
         Row: {
           created_at: string
@@ -541,6 +562,15 @@ export type Database = {
       }
       cleanup_presence: { Args: never; Returns: undefined }
       end_presence: { Args: never; Returns: undefined }
+      hit_rate_limit: {
+        Args: {
+          _bucket: string
+          _max: number
+          _user: string
+          _window_seconds: number
+        }
+        Returns: boolean
+      }
       my_connections: {
         Args: { _place_id: string }
         Returns: {
