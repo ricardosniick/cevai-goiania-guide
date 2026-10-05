@@ -192,7 +192,6 @@ function AuthLayout({ onBack, children }: { onBack: () => void; children: ReactN
   </section>;
 }
 
-
 function PasswordField({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (v: string) => void; autoComplete: string }) {
   const [show, setShow] = useState(false);
   return <label className="block"><span className="mb-1.5 block text-xs font-bold text-foreground/80">{label}</span><div className="relative"><input value={value} onChange={(e) => onChange(e.target.value)} type={show ? "text" : "password"} autoComplete={autoComplete} className="h-12 w-full rounded-xl border border-input bg-card px-4 pr-12 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /><button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Ocultar senha" : "Mostrar senha"} className="absolute right-3 top-3 text-muted-foreground">{show ? <EyeOff size={20} /> : <Eye size={20} />}</button></div></label>;
