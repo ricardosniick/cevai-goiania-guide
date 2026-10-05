@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { Check, Flag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { friendlyError, isNetworkError, OFFLINE_MSG } from "@/lib/errors";
 import { supabase } from "@/integrations/supabase/client";
 import { postSituation, type PlaceSummary } from "@/lib/places.functions";
 import { SITUATION_OPTIONS, situationKind, situationRadius } from "@/lib/categories";
@@ -71,13 +72,17 @@ export function SituationPanel({ user, place, notify }: { user: User; place: Pla
       setOpen(false); setPicked([]);
       void qc.invalidateQueries({ queryKey: ["situations"] });
       notify("Situação atualizada ✓");
-    } catch (e) { notify(e instanceof Error ? e.message : "Algo deu errado."); }
+    } catch (e) { if (isNetworkError(e)) { console.error("[erro] situação", e); notify(OFFLINE_MSG); } else notify(e instanceof Error ? e.message : "Algo deu errado."); }
     finally { setBusy(false); }
   };
   const report = async () => {
     if (!cur?.situation_id) return;
-    const { error } = await supabase.from("situation_reports").insert({ situation_id: cur.situation_id, reporter: user.id });
-    notify(error ? "Você já denunciou esta situação." : "Denúncia enviada. Obrigado!");
+    try {
+      const { error } = await supabase.from("situation_reports").insert({ situation_id: cur.situation_id, reporter: user.id });
+      if (error && error.code === "23505") return notify("Você já denunciou esta situação.");
+      if (error) return notify(friendlyError(error, "Não foi possível enviar a denúncia. Tente de novo.", "situation_reports"));
+      notify("Denúncia enviada. Obrigado!");
+    } catch (e) { notify(friendlyError(e, "Não foi possível enviar a denúncia. Tente de novo.", "situation_reports")); }
   };
   const toggle = (o: string) => setPicked((p) => (p.includes(o) ? p.filter((x) => x !== o) : p.length >= 4 ? p : [...p, o]));
 

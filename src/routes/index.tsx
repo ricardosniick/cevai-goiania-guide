@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
+import { friendlyError } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
@@ -263,11 +264,15 @@ function SignupScreen({ onBack, onLogin, onDone, notify }: { onBack: () => void;
   const mismatch = confirm.length > 0 && confirm !== password;
   const submit = async () => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } } });
-    setLoading(false);
-    if (error) return notify(error.message.includes("registered") ? "Este e-mail já tem conta." : "Não foi possível criar a conta.");
-    if (data.session && data.user) await supabase.from("profiles").upsert({ user_id: data.user.id, full_name: name.trim() }, { onConflict: "user_id" });
-    onDone(data.session ? data.user : null);
+    try {
+      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } } });
+      if (error) return notify(error.message.includes("registered") ? "Este e-mail já tem conta." : friendlyError(error, "Não foi possível criar a conta.", "signup"));
+      if (data.session && data.user) {
+        const { error: pErr } = await supabase.from("profiles").upsert({ user_id: data.user.id, full_name: name.trim() }, { onConflict: "user_id" });
+        if (pErr) notify(friendlyError(pErr, "Conta criada, mas não foi possível salvar seu nome.", "profile upsert"));
+      }
+      onDone(data.session ? data.user : null);
+    } catch (e) { notify(friendlyError(e, "Não foi possível criar a conta.", "signup")); } finally { setLoading(false); }
   };
   return <AuthLayout onBack={onBack}>
     <h1 className="mt-8 font-display text-[1.75rem] font-black leading-tight">Criar sua conta</h1>
@@ -375,6 +380,10 @@ function Skeleton({ className }: { className: string }) { return <div className=
 
 function ErrorBox({ error }: { error: unknown }) {
   return <div className="mx-5 mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error instanceof Error ? error.message : "Não foi possível carregar os lugares."}</div>;
+}
+
+function ListError({ onRetry }: { onRetry: () => void }) {
+  return <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Não foi possível carregar. <button onClick={onRetry} className="font-bold underline">Tentar de novo</button></div>;
 }
 
 /* ---------------- Explorar ---------------- */
@@ -559,8 +568,12 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
 
   const toggle = async (list: SavedList) => {
     if (!user) return;
-    if (lists.has(list)) await supabase.from("saved_places").delete().match({ user_id: user.id, place_id: placeId, list });
-    else await supabase.from("saved_places").insert({ user_id: user.id, place_id: placeId, list });
+    try {
+      const { error } = lists.has(list)
+        ? await supabase.from("saved_places").delete().match({ user_id: user.id, place_id: placeId, list })
+        : await supabase.from("saved_places").insert({ user_id: user.id, place_id: placeId, list });
+      if (error) return notify(friendlyError(error, "Não foi possível salvar. Tente de novo.", "saved_places"));
+    } catch (e) { return notify(friendlyError(e, "Não foi possível salvar. Tente de novo.", "saved_places")); }
     notify(lists.has(list) ? `Removido de “${LIST_LABELS[list]}”` : `Adicionado a “${LIST_LABELS[list]}”`);
     void queryClient.invalidateQueries({ queryKey: ["saved"] });
   };
@@ -654,18 +667,21 @@ function ExperienceMenu({ exp }: { exp: Experience }) {
   if (!ctx || exp.user_id !== ctx.user.id) return null;
   const refresh = () => { for (const k of ["experiences", "place-stats", "stall-stats"]) void qc.invalidateQueries({ queryKey: [k] }); };
   const togglePrivacy = async () => {
-    const { error } = await supabase.from("experiences").update({ is_public: !exp.is_public }).eq("id", exp.id).eq("user_id", ctx.user.id);
-    if (error) return ctx.notify("Não foi possível alterar a privacidade.");
+    try {
+      const { error } = await supabase.from("experiences").update({ is_public: !exp.is_public }).eq("id", exp.id).eq("user_id", ctx.user.id);
+      if (error) return ctx.notify(friendlyError(error, "Não foi possível alterar a privacidade.", "privacy"));
+    } catch (e) { return ctx.notify(friendlyError(e, "Não foi possível alterar a privacidade.", "privacy")); }
     refresh(); ctx.notify(exp.is_public ? "Agora só você vê esta experiência." : "Experiência compartilhada.");
   };
   const remove = async () => {
     setBusy(true);
-    if (exp.photoItems.length) await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path));
-    // Photos and criteria rows are removed by the database together with the experience; the place stays.
-    const { error } = await supabase.from("experiences").delete().eq("id", exp.id).eq("user_id", ctx.user.id);
-    setBusy(false); setConfirm(false);
-    if (error) return ctx.notify("Não foi possível excluir.");
-    refresh(); ctx.notify("Experiência excluída.");
+    try {
+      // Photos and criteria rows are removed by the database together with the experience; the place stays.
+      const { error } = await supabase.from("experiences").delete().eq("id", exp.id).eq("user_id", ctx.user.id);
+      if (error) return ctx.notify(friendlyError(error, "Não foi possível excluir.", "delete experience"));
+      if (exp.photoItems.length) { const rm = await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path)); if (rm.error) console.error("[erro] remove photo files", rm.error); }
+      refresh(); ctx.notify("Experiência excluída.");
+    } catch (e) { ctx.notify(friendlyError(e, "Não foi possível excluir.", "delete experience")); } finally { setBusy(false); setConfirm(false); }
   };
   return <>
     <DropdownMenu>
@@ -691,13 +707,15 @@ function StallsPanel({ place, user, onRegister, notify }: { place: PlaceSummary;
   const qc = useQueryClient();
   const stalls = useQuery({ queryKey: ["stalls", place.id], queryFn: async () => { const { data, error } = await supabase.from("fair_stalls").select("id, place_id, name, kind, emoji, created_by").eq("place_id", place.id).order("created_at"); if (error) throw error; return data as Stall[]; } });
   const ids = (stalls.data ?? []).map((x) => x.id);
-  const stats = useQuery({ queryKey: ["stall-stats", ids.join(",")], enabled: ids.length > 0, queryFn: async () => { const { data } = await supabase.rpc("stall_experience_stats", { _stall_ids: ids }); const m: Record<string, PlaceStat> = {}; (data ?? []).forEach((r) => { m[r.stall_id] = { avg: Number(r.avg_rating), count: Number(r.experience_count) }; }); return m; } });
+  const stats = useQuery({ queryKey: ["stall-stats", ids.join(",")], enabled: ids.length > 0, queryFn: async () => { const { data, error } = await supabase.rpc("stall_experience_stats", { _stall_ids: ids }); if (error) throw error; const m: Record<string, PlaceStat> = {}; (data ?? []).forEach((r) => { m[r.stall_id] = { avg: Number(r.avg_rating), count: Number(r.experience_count) }; }); return m; } });
   const [adding, setAdding] = useState(false); const [name, setName] = useState(""); const [kind, setKind] = useState(STALL_KINDS[0]!);
   const ensure = useServerFn(ensurePlace);
   const add = async () => {
-    try { await ensure({ data: { placeId: place.id } }); } catch { return notify("Não foi possível adicionar a barraquinha."); }
-    const { error } = await supabase.from("fair_stalls").insert({ place_id: place.id, name: name.trim(), kind: kind.kind, emoji: kind.emoji, created_by: user.id });
-    if (error) return notify("Não foi possível adicionar a barraquinha.");
+    try {
+      await ensure({ data: { placeId: place.id } });
+      const { error } = await supabase.from("fair_stalls").insert({ place_id: place.id, name: name.trim(), kind: kind.kind, emoji: kind.emoji, created_by: user.id });
+      if (error) return notify(friendlyError(error, "Não foi possível adicionar a barraquinha.", "fair_stalls"));
+    } catch (e) { return notify(friendlyError(e, "Não foi possível adicionar a barraquinha.", "fair_stalls")); }
     setName(""); setAdding(false); notify("Barraquinha adicionada!"); void qc.invalidateQueries({ queryKey: ["stalls", place.id] });
   };
   return <div>
@@ -709,6 +727,7 @@ function StallsPanel({ place, user, onRegister, notify }: { place: PlaceSummary;
         <div className="min-w-0 flex-1"><p className="truncate font-bold">{st.name}</p><p className="text-[10px] font-bold text-muted-foreground">{st.kind} · criado pela comunidade</p><CeVaiRating stat={stat} /></div>
         <Button size="sm" onClick={() => onRegister(st)} className="shrink-0 rounded-full bg-secondary text-xs font-extrabold text-secondary-foreground hover:bg-secondary/90">Eu fui</Button>
       </div>; })}
+      {stalls.isError && <ListError onRetry={() => void stalls.refetch()} />}
       {stalls.data?.length === 0 && <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma barraquinha cadastrada ainda.</p>}
     </div>
     {adding ? <div className="mt-4 space-y-3 rounded-2xl bg-card p-4 shadow-sm">
@@ -737,12 +756,13 @@ function BooksPanel({ user, notify }: { user: User; notify: (m: string) => void 
   const [rating, setRating] = useState(0); const [comment, setComment] = useState(""); const [rec, setRec] = useState(true); const [file, setFile] = useState<File | null>(null); const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
-    let photo_path: string | null = null;
-    if (file && file.size <= 10 * 1024 * 1024) { const path = `${user.id}/books/${Date.now()}.${(file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "")}`; const up = await supabase.storage.from("experience-photos").upload(path, file, { contentType: file.type }); if (!up.error) photo_path = path; }
-    const { error } = await supabase.from("books").insert({ user_id: user.id, title: title.trim(), author: author.trim() || null, status, rating: rating || null, comment: comment.trim() || null, would_recommend: status === "terminei" ? rec : null, photo_path });
-    setSaving(false);
-    if (error) return notify("Não foi possível salvar o livro.");
-    setOpen(false); setTitle(""); setAuthor(""); setRating(0); setComment(""); setFile(null); notify("Livro registrado!"); void qc.invalidateQueries({ queryKey: ["books"] });
+    try {
+      let photo_path: string | null = null; let photoFailed = false;
+      if (file && file.size <= 10 * 1024 * 1024) { const path = `${user.id}/books/${Date.now()}.${(file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "")}`; const up = await supabase.storage.from("experience-photos").upload(path, file, { contentType: file.type }); if (!up.error) photo_path = path; else { console.error("[erro] book photo upload", up.error); photoFailed = true; } }
+      const { error } = await supabase.from("books").insert({ user_id: user.id, title: title.trim(), author: author.trim() || null, status, rating: rating || null, comment: comment.trim() || null, would_recommend: status === "terminei" ? rec : null, photo_path });
+      if (error) return notify(friendlyError(error, "Não foi possível salvar o livro.", "books"));
+      setOpen(false); setTitle(""); setAuthor(""); setRating(0); setComment(""); setFile(null); notify(photoFailed ? "Livro registrado, mas a foto não pôde ser salva." : "Livro registrado!"); void qc.invalidateQueries({ queryKey: ["books"] });
+    } catch (e) { notify(friendlyError(e, "Não foi possível salvar o livro.", "books")); } finally { setSaving(false); }
   };
   return <div>
     {open ? <div className="space-y-3 rounded-2xl bg-card p-4 shadow-sm">
@@ -755,6 +775,7 @@ function BooksPanel({ user, notify }: { user: User; notify: (m: string) => void 
       {status === "terminei" && <button onClick={() => setRec((v) => !v)} className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${rec ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{rec ? "❤️ Recomendo" : "Não recomendo"}</button>}
       <div className="flex gap-2"><Button variant="outline" onClick={() => setOpen(false)} className="flex-1 rounded-full">Cancelar</Button><Button disabled={!title.trim() || saving} onClick={() => void save()} className="flex-1 rounded-full bg-secondary font-extrabold text-secondary-foreground hover:bg-secondary/90">{saving ? "Salvando…" : "Salvar livro"}</Button></div>
     </div> : <Button onClick={() => setOpen(true)} variant="outline" className="h-11 w-full rounded-full border-dashed font-extrabold"><BookOpen size={16} />Registrar livro</Button>}
+    {books.isError && <div className="mt-3"><ListError onRetry={() => void books.refetch()} /></div>}
     <div className="mt-3 space-y-2">{books.data?.map((b) => <div key={b.id} className="flex gap-3 rounded-2xl bg-card p-3 shadow-sm">
       {b.photo ? <img src={b.photo} alt={b.title} className="h-20 w-14 shrink-0 rounded-lg object-cover" /> : <div className="grid h-20 w-14 shrink-0 place-items-center rounded-lg bg-muted text-2xl">📖</div>}
       <div className="min-w-0 flex-1"><p className="truncate font-display font-black">{b.title}</p>{b.author && <p className="truncate text-xs text-muted-foreground">{b.author}</p>}<div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold"><span className="rounded-full bg-muted px-2 py-0.5">{BOOK_STATUS[b.status as BookStatus]}</span>{b.rating && <Stars value={b.rating} size={11} />}{b.would_recommend && <span className="text-primary">❤️ Recomendo</span>}</div>{b.comment && <p className="mt-1 line-clamp-2 text-xs text-foreground/80">{b.comment}</p>}</div>
@@ -773,10 +794,11 @@ function SavedScreen({ user, onOpen, onLogin }: { user: User | null; onOpen: (id
     <h1 className="px-5 font-display text-[1.75rem] font-black">Seus lugares salvos</h1>
     {!user ? <LoginPrompt onLogin={onLogin} text="Entre para guardar lugares que quer conhecer e seus favoritos." /> : <>
       <div className="mt-4 flex gap-2 px-5">{(Object.keys(LIST_LABELS) as SavedList[]).map((l) => <button key={l} onClick={() => setList(l)} className={`rounded-full px-4 py-2 text-sm font-bold ${list === l ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm"}`}>{LIST_LABELS[l]}</button>)}</div>
+      {saved.isError && <div className="mx-5 mt-5"><ListError onRetry={() => void saved.refetch()} /></div>}
       <div className="mt-5 grid grid-cols-2 gap-3 px-5">
         {items.map((s) => <button key={s.place_id} onClick={() => onOpen(s.place_id)} className="overflow-hidden rounded-2xl bg-card text-left shadow-sm"><PlacePhoto src={s.place?.photo_url ?? null} alt={s.place?.name ?? ""} className="h-28 w-full" /><div className="p-3"><p className="text-[10px] font-extrabold text-secondary">{emojiOf(s.place?.category ?? "")} {s.place?.category}</p><p className="line-clamp-2 font-display text-sm font-black">{s.place?.name}</p></div></button>)}
       </div>
-      {!saved.isLoading && items.length === 0 && <p className="mx-5 mt-2 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list === "ja_fui" ? "Registre uma experiência e o lugar aparece aqui." : "Nada por aqui ainda. Abra um lugar e toque em Quero ir ou no coração."}</p>}
+      {!saved.isLoading && !saved.isError && items.length === 0 && <p className="mx-5 mt-2 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list === "ja_fui" ? "Registre uma experiência e o lugar aparece aqui." : "Nada por aqui ainda. Abra um lugar e toque em Quero ir ou no coração."}</p>}
     </>}
   </section>;
 }
@@ -810,7 +832,7 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
     <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">Minhas experiências</h2></div>
     <div className="mt-3 flex gap-2 px-5">{([["lista", "Lista"], ["mapa", "Mapa"], ["fotos", "Fotos"], ["livros", "📚 Livros"]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} className={`rounded-full px-4 py-2 text-sm font-bold ${view === k ? "bg-primary text-primary-foreground" : "bg-card shadow-sm"}`}>{l}</button>)}</div>
     <div key={view} className="mt-4 animate-tab-in px-5">
-      {view === "lista" && (list.length ? <div className="space-y-3">{list.map((e) => <ExperienceCard key={e.id} exp={e} own showPlace onOpen={() => onOpen(e.place_id)} />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Você ainda não registrou nenhuma experiência. Toque no + para começar.</p>)}
+      {view === "lista" && exps.isError ? <ListError onRetry={() => void exps.refetch()} /> : view === "lista" && (list.length ? <div className="space-y-3">{list.map((e) => <ExperienceCard key={e.id} exp={e} own showPlace onOpen={() => onOpen(e.place_id)} />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Você ainda não registrou nenhuma experiência. Toque no + para começar.</p>)}
       {view === "livros" && <BooksPanel user={user} notify={notify} />}
       {view === "mapa" && <MapView center={GOIANIA} markers={markers} onSelect={onOpen} className="h-80 overflow-hidden rounded-2xl" />}
       {view === "fotos" && (photos.length ? <div className="grid grid-cols-3 gap-1.5">{photos.map((u) => <img key={u} src={u} alt="Minha foto" className="aspect-square w-full rounded-lg object-cover" />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Fotos das suas experiências aparecem aqui.</p>)}
@@ -858,20 +880,20 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
         const removed = editing.photoItems.filter((p) => !kept.some((k) => k.path === p.path)).map((p) => p.path);
         if (removed.length) {
           const del = await supabase.from("experience_photos").delete().eq("experience_id", editing.id).in("storage_path", removed);
-          if (del.error) photoFailed = true;
+          if (del.error) { console.error("[erro] experience_photos delete", del.error); photoFailed = true; }
           else { const rm = await supabase.storage.from("experience-photos").remove(removed); if (rm.error) console.error(rm.error); }
         }
         for (const [i, f] of files.entries()) {
           const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
           const path = `${user.id}/${editing.id}/${Date.now()}-${i}.${ext}`;
           const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-          if (up.error) { photoFailed = true; continue; }
+          if (up.error) { console.error("[erro] photo upload", up.error); photoFailed = true; continue; }
           const ins = await supabase.from("experience_photos").insert({ experience_id: editing.id, user_id: user.id, storage_path: path });
-          if (ins.error) photoFailed = true;
+          if (ins.error) { console.error("[erro] experience_photos", ins.error); photoFailed = true; }
         }
         if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
         onSaved();
-      } catch { notify("Não foi possível atualizar. Tente de novo."); } finally { setSaving(false); }
+      } catch (e) { notify(friendlyError(e, "Não foi possível atualizar. Tente de novo.", "update experience")); } finally { setSaving(false); }
       return;
     }
     try {
@@ -879,21 +901,22 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       const { data: exp, error } = await supabase.from("experiences").insert({ user_id: user.id, place_id: place.id, category: place.category, rating, comment: comment.trim() || null, would_return: wouldReturn, stall_id: initialStall?.id ?? null }).select("id").single();
       if (error || !exp) throw error ?? new Error("insert");
       const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
-      if (scoreRows.length) await supabase.from("experience_scores").insert(scoreRows);
       let photoFailed = false;
+      if (scoreRows.length) { const sc = await supabase.from("experience_scores").insert(scoreRows); if (sc.error) { console.error("[erro] experience_scores", sc.error); setTimeout(() => notify("As notas por critério não puderam ser salvas. Edite a experiência para tentar de novo."), 2500); } }
       for (const [i, f] of files.entries()) {
         const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
         const path = `${user.id}/${exp.id}/${Date.now()}-${i}.${ext}`;
         const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-        if (up.error) { photoFailed = true; continue; }
+        if (up.error) { console.error("[erro] photo upload", up.error); photoFailed = true; continue; }
         const ins = await supabase.from("experience_photos").insert({ experience_id: exp.id, user_id: user.id, storage_path: path });
-        if (ins.error) photoFailed = true;
+        if (ins.error) { console.error("[erro] experience_photos", ins.error); photoFailed = true; }
       }
       if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
-      await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
+      const sv = await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
+      if (sv.error) console.error("[erro] saved_places ja_fui", sv.error);
       onSaved();
-    } catch {
-      notify("Não foi possível registrar. Tente de novo.");
+    } catch (e) {
+      notify(friendlyError(e, "Não foi possível registrar. Tente de novo.", "create experience"));
     } finally { setSaving(false); }
   };
 

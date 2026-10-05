@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { Flag, Lock, MapPin, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { friendlyError, isNetworkError, OFFLINE_MSG } from "@/lib/errors";
 import { supabase } from "@/integrations/supabase/client";
 import { startPresence, type PlaceSummary } from "@/lib/places.functions";
 import { presenceInterests, presenceRadius } from "@/lib/categories";
@@ -23,7 +24,7 @@ const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: "invisible", label: "🔒 Ficar invisível", hint: "Ninguém vê você." },
 ];
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Algo deu errado.");
+const errMsg = (e: unknown) => (isNetworkError(e) ? (console.error("[erro] presença", e), OFFLINE_MSG) : e instanceof Error ? e.message : "Algo deu errado.");
 
 export function PresencePanel({ user, place, notify }: { user: User; place: PlaceSummary; notify: (m: string) => void }) {
   const qc = useQueryClient();
@@ -66,7 +67,13 @@ export function PresencePanel({ user, place, notify }: { user: User; place: Plac
   const inArea = dist !== null && pos !== null && pos.accuracy <= 150 && dist <= radius + Math.min(pos.accuracy, 50);
 
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["presence"] }); };
-  const end = async (msg = "Presença encerrada.") => { await supabase.rpc("end_presence"); setChatId(null); refresh(); notify(msg); };
+  const end = async (msg = "Presença encerrada.") => {
+    try {
+      const { error } = await supabase.rpc("end_presence");
+      if (error) return notify(friendlyError(error, "Não foi possível encerrar a presença.", "end_presence"));
+      setChatId(null); refresh(); notify(msg);
+    } catch (e) { notify(friendlyError(e, "Não foi possível encerrar a presença.", "end_presence")); }
+  };
 
   // Leaving the area ends presence (and its connections).
   const leftRef = useRef(false);
@@ -87,16 +94,23 @@ export function PresencePanel({ user, place, notify }: { user: User; place: Plac
   };
 
   const rpc = async (fn: () => PromiseLike<{ error: { message: string } | null }>, ok: string) => {
-    const { error } = await fn();
-    if (error) notify(error.message.includes("already") ? "Você já enviou um pedido para essa pessoa nesta presença." : error.message.includes("not_open") ? "Essa pessoa não está aberta a conexões." : "Não foi possível concluir.");
+    let error: { message: string } | null;
+    try { ({ error } = await fn()); } catch (e) { notify(friendlyError(e, "Não foi possível concluir.", "connection rpc")); return; }
+    if (error) console.error("[erro] connection rpc", error);
+    if (error && isNetworkError(error)) notify(OFFLINE_MSG);
+    else if (error) notify(error.message.includes("already") ? "Você já enviou um pedido para essa pessoa nesta presença." : error.message.includes("not_open") ? "Essa pessoa não está aberta a conexões." : "Não foi possível concluir.");
     else notify(ok);
     refresh();
   };
   const report = async (id: string) => {
     const reason = window.prompt("Conte o que aconteceu (opcional):") ?? "";
-    await supabase.from("user_reports").insert({ reporter: user.id, reported: id, place_id: place.id, reason: reason.slice(0, 500) || "Sem detalhes" });
-    await supabase.from("user_blocks").upsert({ blocker: user.id, blocked: id });
-    refresh(); notify("Denúncia enviada. Essa pessoa foi bloqueada.");
+    try {
+      const r1 = await supabase.from("user_reports").insert({ reporter: user.id, reported: id, place_id: place.id, reason: reason.slice(0, 500) || "Sem detalhes" });
+      const r2 = await supabase.from("user_blocks").upsert({ blocker: user.id, blocked: id });
+      refresh();
+      if (r1.error || r2.error) return notify(friendlyError(r1.error ?? r2.error, r2.error ? "Não foi possível bloquear. Tente de novo." : "Não foi possível enviar a denúncia. Tente de novo.", "report/block"));
+      notify("Denúncia enviada. Essa pessoa foi bloqueada.");
+    } catch (e) { notify(friendlyError(e, "Não foi possível enviar a denúncia. Tente de novo.", "report/block")); }
   };
 
   const options = presenceInterests(place.category);
@@ -170,8 +184,11 @@ function ChatSheet({ requestId, name, onClose, notify }: { requestId: string; na
   } });
   const send = async () => {
     const body = text.trim(); if (!body) return;
-    const { error } = await supabase.rpc("send_chat_message", { _request_id: requestId, _body: body });
-    if (error) { notify("A conexão terminou."); onClose(); return; }
+    try {
+      const { error } = await supabase.rpc("send_chat_message", { _request_id: requestId, _body: body });
+      if (error && isNetworkError(error)) { console.error("[erro] chat", error); return notify(OFFLINE_MSG); }
+      if (error) { console.error("[erro] chat", error); notify("A conexão terminou."); onClose(); return; }
+    } catch (e) { return notify(friendlyError(e, "Não foi possível enviar.", "chat")); }
     setText(""); void msgs.refetch();
   };
   return <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40" onClick={onClose}>
