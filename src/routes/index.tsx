@@ -849,19 +849,27 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
     setSaving(true);
     if (editing) {
       try {
-        const { error } = await supabase.from("experiences").update({ rating, comment: comment.trim() || null, would_return: wouldReturn, is_public: isPublic }).eq("id", editing.id).eq("user_id", user.id);
+        const allowedCriteria = new Set(initialStall || editing.stall_id ? STALL_CRITERIA : criteriaFor(place.category));
+        const scoreMap = Object.fromEntries(Object.entries(scores).filter(([c, v]) => allowedCriteria.has(c) && Number.isInteger(v) && v >= 1 && v <= 5));
+        // Experience + scores are replaced in one database transaction.
+        const { error } = await supabase.rpc("update_experience", { _id: editing.id, _rating: rating, _comment: comment.trim(), _would_return: wouldReturn, _is_public: isPublic, _scores: scoreMap });
         if (error) throw error;
-        await supabase.from("experience_scores").delete().eq("experience_id", editing.id);
-        const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: editing.id, criterion, score }));
-        if (scoreRows.length) await supabase.from("experience_scores").insert(scoreRows);
+        let photoFailed = false;
         const removed = editing.photoItems.filter((p) => !kept.some((k) => k.path === p.path)).map((p) => p.path);
-        if (removed.length) { await supabase.from("experience_photos").delete().eq("experience_id", editing.id).in("storage_path", removed); await supabase.storage.from("experience-photos").remove(removed); }
+        if (removed.length) {
+          const del = await supabase.from("experience_photos").delete().eq("experience_id", editing.id).in("storage_path", removed);
+          if (del.error) photoFailed = true;
+          else { const rm = await supabase.storage.from("experience-photos").remove(removed); if (rm.error) console.error(rm.error); }
+        }
         for (const [i, f] of files.entries()) {
           const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
           const path = `${user.id}/${editing.id}/${Date.now()}-${i}.${ext}`;
           const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-          if (!up.error) await supabase.from("experience_photos").insert({ experience_id: editing.id, user_id: user.id, storage_path: path });
+          if (up.error) { photoFailed = true; continue; }
+          const ins = await supabase.from("experience_photos").insert({ experience_id: editing.id, user_id: user.id, storage_path: path });
+          if (ins.error) photoFailed = true;
         }
+        if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
         onSaved();
       } catch { notify("Não foi possível atualizar. Tente de novo."); } finally { setSaving(false); }
       return;
@@ -872,12 +880,16 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       if (error || !exp) throw error ?? new Error("insert");
       const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
       if (scoreRows.length) await supabase.from("experience_scores").insert(scoreRows);
+      let photoFailed = false;
       for (const [i, f] of files.entries()) {
         const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
         const path = `${user.id}/${exp.id}/${Date.now()}-${i}.${ext}`;
         const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-        if (!up.error) await supabase.from("experience_photos").insert({ experience_id: exp.id, user_id: user.id, storage_path: path });
+        if (up.error) { photoFailed = true; continue; }
+        const ins = await supabase.from("experience_photos").insert({ experience_id: exp.id, user_id: user.id, storage_path: path });
+        if (ins.error) photoFailed = true;
       }
+      if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
       await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
       onSaved();
     } catch {

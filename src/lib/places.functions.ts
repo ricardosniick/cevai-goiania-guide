@@ -276,6 +276,7 @@ export const startPresence = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
+    await rateLimit(context.userId, "presence_try", 30, 3600, RATE_MSG, true);
     await rateLimit(context.userId, "presence", 6, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
@@ -318,6 +319,7 @@ export const postSituation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
+    await rateLimit(context.userId, "situation_try", 30, 3600, RATE_MSG, true);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
