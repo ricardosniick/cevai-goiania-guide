@@ -126,7 +126,7 @@ const searchSchema = z.object({
 export const searchPlaces = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => searchSchema.parse(data))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
     const center = { latitude: data.lat ?? GOIANIA.lat, longitude: data.lng ?? GOIANIA.lng };
     const filter = resolveFilter(data.category);
     let result: { places?: GPlace[] };
@@ -161,7 +161,9 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const forced = !data.query && filter.label ? filter.label : undefined;
     const places = await Promise.all((result.places ?? []).slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
-      await context.supabase.from("places").upsert(
+      // Written server-side from Google data only; clients can no longer write `places`.
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.from("places").upsert(
         places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_url: p.photoUrl, updated_at: new Date().toISOString() })),
         { onConflict: "google_place_id" },
       );
@@ -172,7 +174,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
 export const getPlaceDetails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
-  .handler(async ({ data, context }): Promise<PlaceDetails> => {
+  .handler(async ({ data }): Promise<PlaceDetails> => {
     const mask = "id,displayName,formattedAddress,shortFormattedAddress,location,primaryType,types,primaryTypeDisplayName,rating,userRatingCount,photos,editorialSummary,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions";
     const place = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers(mask) });
     const summary = await toSummary(place, 1000);
@@ -180,7 +182,8 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       const url = await photoUrl(p, 800);
       return url ? { url, attribution: p.authorAttributions?.[0]?.displayName ?? null } : null;
     }))).filter((p): p is { url: string; attribution: string | null } => p !== null);
-    await context.supabase.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_url: summary.photoUrl, updated_at: new Date().toISOString() }, { onConflict: "google_place_id" });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_url: summary.photoUrl, updated_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     return {
       ...summary,
       address: place.formattedAddress ?? summary.address,
@@ -191,6 +194,21 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       hours: place.regularOpeningHours?.weekdayDescriptions ?? [],
       photos,
     };
+  });
+
+/** Makes sure a place row exists before user content references it. Client sends only the id; data comes from Google. */
+export const ensurePlace = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { data: existing } = await context.supabase.from("places").select("google_place_id").eq("google_place_id", data.placeId).maybeSingle();
+    if (existing) return { ok: true };
+    const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
+    if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "Lugar", address: g.formattedAddress ?? null, category: categoryOf(g), lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    if (error) { console.error(error); throw new Error("Não foi possível registrar o lugar."); }
+    return { ok: true };
   });
 
 /** Starts presence only after confirming, with the place's real Google data, that the category allows it and the device is inside the presence area. */
