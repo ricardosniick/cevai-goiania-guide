@@ -641,6 +641,15 @@ export type Database = {
           stall_id: string
         }[]
       }
+      upsert_presence: {
+        Args: {
+          _interests: string[]
+          _mode: string
+          _place_id: string
+          _user: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
