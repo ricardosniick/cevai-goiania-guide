@@ -43,6 +43,13 @@
       "when": 1791226331521,
       "tag": "0005_0005_upsert_presence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791226460209,
+      "tag": "0006_0006_post_situation_atomic",
+      "breakpoints": true
     }
   ]
 }
