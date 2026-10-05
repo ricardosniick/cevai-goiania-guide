@@ -12,17 +12,25 @@ function renderAt(path: string) {
     context: { queryClient },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
-  return render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />);
+  return router;
 }
 
-// The root route renders the full document (<html>/<head>/<body>), which React 19 hoists
-// into the real document instead of the test container, so check both places.
-function painted(container: HTMLElement) {
-  return container.childElementCount > 0 || document.head.childElementCount > 0;
+// The root route renders the whole document (<html>/<head>/<body>); React 19 hoists it into the
+// real document, so assert on router state + document.body instead of the test container.
+async function expectMounted(router: ReturnType<typeof renderAt>) {
+  await waitFor(() => {
+    expect(router.state.status).toBe("idle");
+    expect(router.state.matches.length).toBeGreaterThan(0);
+    expect(document.body.innerHTML.trim().length).toBeGreaterThan(0);
+    expect(document.body.querySelector("*")).not.toBeNull();
+  });
 }
 
 afterEach(() => {
   cleanup();
+  document.head.innerHTML = "";
+  document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
 
@@ -30,16 +38,11 @@ afterEach(() => {
 // routes are rewritten as the app is built and this must keep passing.
 describe("App routing", () => {
   it("renders the index route", async () => {
-    const { container } = renderAt("/");
-
-    await waitFor(() => expect(painted(container)).toBe(true));
+    await expectMounted(renderAt("/"));
   });
 
   it("renders the not-found route", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    const { container } = renderAt("/this-route-does-not-exist");
-
-    await waitFor(() => expect(painted(container)).toBe(true));
+    await expectMounted(renderAt("/this-route-does-not-exist"));
   });
 });
