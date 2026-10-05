@@ -26,7 +26,8 @@
 ## Segurança e robustez (documento em etapas)
 - [x] Etapa 1 — .env no .gitignore; explicar restrição da chave do Maps.
 - [x] Etapa 2 — `places` gravado só pelo servidor (dados do Google); RLS sem insert/update para usuários.
-- [ ] Etapa 3 — Limites de uso por usuário nas buscas ao Google; fotos e cache. (aguarda confirmação dos limites)
+- [x] Etapa 3a — Limites por usuário (busca 30/min, detalhes 60/min, lugar novo 20/min, presença 6/h, situação 1/10min por lugar + 10/h).
+- [ ] Etapa 3b — Fotos: só capa na lista, cache com limite/expiração, não gravar URL temporária.
 - [ ] Etapa 4 — Presença, situação e edição de notas atômicas.
 - [ ] Etapa 5 — Tratar erros ignorados com aviso ao usuário.
 - [ ] Etapa 6 — Limites no chat/conexões, bloqueio no chat, denúncias únicas, auto-ocultar situação, people_here.

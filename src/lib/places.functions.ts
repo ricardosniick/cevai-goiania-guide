@@ -49,6 +49,15 @@ type GPlace = {
   regularOpeningHours?: { weekdayDescriptions?: string[] };
 };
 
+const RATE_MSG = "Muitas tentativas. Tente de novo em alguns instantes.";
+/** Atomic per-user limit (SQL advisory lock). Throws a friendly message when exceeded. */
+async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
+  if (error) { console.error("rate limit check failed", error); return; }
+  if (data === false) throw new Error(message);
+}
+
 const photoCache = new Map<string, string>();
 
 function headers(fieldMask?: string) {
@@ -126,7 +135,8 @@ const searchSchema = z.object({
 export const searchPlaces = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => searchSchema.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await rateLimit(context.userId, "search", 30, 60);
     const center = { latitude: data.lat ?? GOIANIA.lat, longitude: data.lng ?? GOIANIA.lng };
     const filter = resolveFilter(data.category);
     let result: { places?: GPlace[] };
@@ -174,7 +184,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
 export const getPlaceDetails = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
-  .handler(async ({ data }): Promise<PlaceDetails> => {
+  .handler(async ({ data, context }): Promise<PlaceDetails> => {
+    await rateLimit(context.userId, "details", 60, 60);
     const mask = "id,displayName,formattedAddress,shortFormattedAddress,location,primaryType,types,primaryTypeDisplayName,rating,userRatingCount,photos,editorialSummary,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions";
     const place = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers(mask) });
     const summary = await toSummary(place, 1000);
@@ -203,6 +214,7 @@ export const ensurePlace = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: existing } = await context.supabase.from("places").select("google_place_id").eq("google_place_id", data.placeId).maybeSingle();
     if (existing) return { ok: true };
+    await rateLimit(context.userId, "ensure_place", 20, 60);
     const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
     if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -225,6 +237,7 @@ export const startPresence = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
+    await rateLimit(context.userId, "presence", 6, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -270,6 +283,7 @@ export const postSituation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
+    await rateLimit(context.userId, "situation", 10, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -289,11 +303,10 @@ export const postSituation = createServerFn({ method: "POST" })
     const allowed = new Set(SITUATION_OPTIONS[kind]);
     const situations = [...new Set(data.situations.filter((s) => allowed.has(s)))];
     if (!situations.length) throw new Error("Escolha uma situação.");
+    // Per-place 10-min limit only counts real publications (after the on-site check).
+    await rateLimit(context.userId, `situation:${data.placeId}`, 1, 600, "Você atualizou há pouco. Tente de novo em alguns minutos.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { count } = await supabaseAdmin.from("place_situations").select("id", { count: "exact", head: true }).eq("user_id", context.userId).eq("place_id", g.id).gte("created_at", since);
-    if ((count ?? 0) > 0) throw new Error("Você atualizou há pouco. Tente de novo em alguns minutos.");
     await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
     const now = Date.now();
     const { error } = await supabaseAdmin.from("place_situations").insert({ place_id: g.id, user_id: context.userId, kind, situations, created_at: new Date(now).toISOString(), expires_at: new Date(now + 2 * 3600 * 1000).toISOString() });
