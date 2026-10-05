@@ -22,3 +22,14 @@
 - [x] Categorias em grupos (6 na Home + "Ver todas"), filtros do mapa por grupo, critérios por categoria.
 - [x] Feiras com barraquinhas da comunidade e notas separadas da feira.
 - [x] Livros no Perfil (status, nota, foto, recomendo), privados.
+
+## Segurança e robustez (documento em etapas)
+- [x] Etapa 1 — .env no .gitignore; explicar restrição da chave do Maps.
+- [x] Etapa 2 — `places` gravado só pelo servidor (dados do Google); RLS sem insert/update para usuários.
+- [ ] Etapa 3 — Limites de uso por usuário nas buscas ao Google; fotos e cache. (aguarda confirmação dos limites)
+- [ ] Etapa 4 — Presença, situação e edição de notas atômicas.
+- [ ] Etapa 5 — Tratar erros ignorados com aviso ao usuário.
+- [ ] Etapa 6 — Limites no chat/conexões, bloqueio no chat, denúncias únicas, auto-ocultar situação, people_here.
+- [ ] Etapa 7 — Extrair geo.ts e dividir index.tsx aos poucos.
+- [ ] Etapa 8 — Testes de geo e categorias.
+- [ ] Etapa 9 — lang pt-BR, telas de erro em português, viewport-fit=cover.

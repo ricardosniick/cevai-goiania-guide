@@ -14,7 +14,7 @@ import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { searchPlaces, getPlaceDetails, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { searchPlaces, getPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
@@ -669,8 +669,9 @@ function StallsPanel({ place, user, onRegister, notify }: { place: PlaceSummary;
   const ids = (stalls.data ?? []).map((x) => x.id);
   const stats = useQuery({ queryKey: ["stall-stats", ids.join(",")], enabled: ids.length > 0, queryFn: async () => { const { data } = await supabase.rpc("stall_experience_stats", { _stall_ids: ids }); const m: Record<string, PlaceStat> = {}; (data ?? []).forEach((r) => { m[r.stall_id] = { avg: Number(r.avg_rating), count: Number(r.experience_count) }; }); return m; } });
   const [adding, setAdding] = useState(false); const [name, setName] = useState(""); const [kind, setKind] = useState(STALL_KINDS[0]!);
+  const ensure = useServerFn(ensurePlace);
   const add = async () => {
-    await supabase.from("places").upsert({ google_place_id: place.id, name: place.name, address: place.address, category: place.category, lat: place.lat, lng: place.lng, photo_url: place.photoUrl }, { onConflict: "google_place_id" });
+    try { await ensure({ data: { placeId: place.id } }); } catch { return notify("Não foi possível adicionar a barraquinha."); }
     const { error } = await supabase.from("fair_stalls").insert({ place_id: place.id, name: name.trim(), kind: kind.kind, emoji: kind.emoji, created_by: user.id });
     if (error) return notify("Não foi possível adicionar a barraquinha.");
     setName(""); setAdding(false); notify("Barraquinha adicionada!"); void qc.invalidateQueries({ queryKey: ["stalls", place.id] });
@@ -795,6 +796,7 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
 /* ---------------- Registrar experiência ---------------- */
 
 function ExperienceModal({ user, center, location, initialPlace, initialStall, editing = null, onLocate, onClose, onSaved, notify }: { user: User; center: LatLng; location: LatLng | null; initialPlace: PlaceSummary | null; initialStall: Stall | null; editing?: Experience | null; onLocate: () => void; onClose: () => void; onSaved: () => void; notify: (m: string) => void }) {
+  const ensurePlaceFn = useServerFn(ensurePlace);
   const [step, setStep] = useState<"where" | "how">(initialPlace ? "how" : "where");
   const [mode, setMode] = useState<"near" | "search" | "map">("near");
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
@@ -840,7 +842,7 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       return;
     }
     try {
-      await supabase.from("places").upsert({ google_place_id: place.id, name: place.name, address: place.address, category: place.category, lat: place.lat, lng: place.lng, photo_url: place.photoUrl }, { onConflict: "google_place_id" });
+      await ensurePlaceFn({ data: { placeId: place.id } });
       const { data: exp, error } = await supabase.from("experiences").insert({ user_id: user.id, place_id: place.id, category: place.category, rating, comment: comment.trim() || null, would_return: wouldReturn, stall_id: initialStall?.id ?? null }).select("id").single();
       if (error || !exp) throw error ?? new Error("insert");
       const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
