@@ -144,6 +144,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     margin: 0;
+    overscroll-behavior-y: none;
     min-width: 320px;
   }
 
@@ -176,8 +177,8 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@utility animate-screen-in { animation: screen-in 280ms ease-out both; }
-@utility animate-screen-back { animation: screen-back 280ms ease-out both; }
+@utility animate-screen-in { animation: screen-in 280ms ease-out backwards; }
+@utility animate-screen-back { animation: screen-back 280ms ease-out backwards; }
 @utility animate-tab-in { animation: tab-in 220ms ease-out both; }
 @utility animate-toast-in { animation: toast-in 180ms ease-out both; }
 @utility animate-modal-in { animation: modal-in 240ms ease-out both; }
