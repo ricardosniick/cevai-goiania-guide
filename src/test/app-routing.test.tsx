@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,12 +25,13 @@ function renderAt(path: string) {
 // Fails if the router doesn't settle, nothing paints, or a route throws while rendering
 // (React reports caught render errors to console.error with the Error object).
 async function expectMounted({ router, container, errors }: ReturnType<typeof renderAt>) {
-  await waitFor(() => {
-    expect(router.state.status).toBe("idle");
-    expect(router.state.matches.length).toBeGreaterThan(0);
-    expect(router.state.matches.every((m) => m.status === "success")).toBe(true);
-    expect(container.querySelector("*")).not.toBeNull();
-  }, { timeout: 10000 });
+  // Plain polling (not waitFor/act): the router settles on its own timers.
+  const settled = () => router.state.status === "idle" && router.state.matches.length > 0 && router.state.matches.every((m) => m.status === "success");
+  for (let waited = 0; !settled() && waited < 10000; waited += 50) await new Promise((r) => setTimeout(r, 50));
+  expect(router.state.status).toBe("idle");
+  expect(router.state.matches.length).toBeGreaterThan(0);
+  expect(router.state.matches.every((m) => m.status === "success")).toBe(true);
+  expect(container.querySelector("*")).not.toBeNull();
   const thrown = errors.mock.calls.flat().filter((a) => a instanceof Error);
   expect(thrown).toEqual([]);
 }
