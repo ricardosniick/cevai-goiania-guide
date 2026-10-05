@@ -231,7 +231,7 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
 /** Turns stored Google photo names into fresh display URLs (cover size). Missing/failed ones are simply omitted. */
 export const resolvePlacePhotos = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(50) }).parse(data))
+  .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(30) }).parse(data))
   .handler(async ({ data, context }) => {
     const names = [...new Set(data.names)];
     const out: Record<string, string> = {};
@@ -298,12 +298,8 @@ export const startPresence = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
-    await supabaseAdmin.from("place_presence").delete().eq("user_id", context.userId);
-    const now = Date.now();
-    const { error } = await supabaseAdmin.from("place_presence").insert({
-      user_id: context.userId, place_id: g.id, mode: data.mode, visible: data.mode !== "invisible", interests,
-      status: null, started_at: new Date(now).toISOString(), expires_at: new Date(now + 3 * 3600 * 1000).toISOString(),
-    });
+    // Single atomic statement: replaces any previous presence, so a failure never leaves the user without one.
+    const { error } = await supabaseAdmin.rpc("upsert_presence", { _user: context.userId, _place_id: g.id!, _mode: data.mode, _interests: interests });
     if (error) { console.error(error); throw new Error("Não foi possível marcar presença."); }
     await supabaseAdmin.rpc("cleanup_presence");
     return { radius };

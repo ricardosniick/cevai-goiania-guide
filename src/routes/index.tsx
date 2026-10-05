@@ -4,7 +4,7 @@ import {
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2 } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -496,7 +496,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
 
 /* ---------------- Data: experiences & saved ---------------- */
 
-async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }): Promise<Experience[]> {
+async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }, qc: QueryClient): Promise<Experience[]> {
   let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url, photo_name), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
   if (filter.userId) q = q.eq("user_id", filter.userId);
   if (filter.placeId) q = q.eq("place_id", filter.placeId);
@@ -509,15 +509,22 @@ async function loadExperiences(filter: { userId?: string; placeId?: string; stal
     const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
     signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
   }
-  return (await withFreshPhotos(data ?? [])).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
+  return (await withFreshPhotos(data ?? [], qc)).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
 }
 
 /** Rows joined with `places`: replace photo_url with a fresh URL generated from photo_name (old rows keep their stored URL). */
-async function withFreshPhotos<T extends { place: unknown }>(rows: T[]): Promise<T[]> {
-  const names = [...new Set(rows.map((r) => (r.place as { photo_name?: string | null } | null)?.photo_name).filter((n): n is string => !!n))].slice(0, 50);
+async function withFreshPhotos<T extends { place: unknown }>(rows: T[], qc: QueryClient): Promise<T[]> {
+  const names = [...new Set(rows.map((r) => (r.place as { photo_name?: string | null } | null)?.photo_name).filter((n): n is string => !!n))].sort();
   if (!names.length) return rows;
-  let urls: Record<string, string> = {};
-  try { urls = await resolvePlacePhotos({ data: { names } }); } catch { /* keep stored URLs / "sem foto" */ }
+  // Up to 30 names per server request (one rate-limit hit each); cached ~20 min so returning to a screen doesn't ask again.
+  const chunks: string[][] = [];
+  for (let i = 0; i < names.length; i += 30) chunks.push(names.slice(i, i + 30));
+  const urls: Record<string, string> = {};
+  await Promise.all(chunks.map(async (chunk) => {
+    try {
+      Object.assign(urls, await qc.fetchQuery({ queryKey: ["photo-urls", chunk.join("|")], queryFn: () => resolvePlacePhotos({ data: { names: chunk } }), staleTime: 20 * 60 * 1000, gcTime: 25 * 60 * 1000, retry: false }));
+    } catch { /* keep stored URLs / "sem foto" */ }
+  }));
   return rows.map((r) => {
     const p = r.place as { photo_name?: string | null; photo_url: string | null } | null;
     if (!p?.photo_name || !urls[p.photo_name]) return r;
@@ -526,13 +533,14 @@ async function withFreshPhotos<T extends { place: unknown }>(rows: T[]): Promise
 }
 
 function useSaved(user: User | null) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ["saved", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase.from("saved_places").select("place_id, list, created_at, place:places(name, address, category, photo_url, photo_name, lat, lng)").order("created_at", { ascending: false });
       if (error) throw error;
-      return withFreshPhotos(data ?? []);
+      return withFreshPhotos(data ?? [], qc);
     },
   });
 }
@@ -543,7 +551,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
   const details = useServerFn(getPlaceDetails);
   const queryClient = useQueryClient();
   const place = useQuery({ queryKey: ["place", placeId], queryFn: () => details({ data: { placeId } }), enabled: !!user, staleTime: 30 * 60 * 1000, retry: false });
-  const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }), enabled: !!user });
+  const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }, queryClient), enabled: !!user });
   const saved = useSaved(user);
   const stats = usePlaceStats(user, [placeId]);
   const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos" | "Barraquinhas">("Sobre");
@@ -776,7 +784,8 @@ function SavedScreen({ user, onOpen, onLogin }: { user: User | null; onOpen: (id
 /* ---------------- Perfil ---------------- */
 
 function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { user: User | null; name: string; onOpen: (id: string) => void; onLogin: () => void; onSignOut: () => void; notify: (m: string) => void }) {
-  const exps = useQuery({ queryKey: ["experiences", "mine", user?.id], queryFn: () => loadExperiences({ userId: user!.id }), enabled: !!user });
+  const expQc = useQueryClient();
+  const exps = useQuery({ queryKey: ["experiences", "mine", user?.id], queryFn: () => loadExperiences({ userId: user!.id }, expQc), enabled: !!user });
   const saved = useSaved(user);
   const [view, setView] = useState<"lista" | "mapa" | "fotos" | "livros">("lista");
   const list = exps.data ?? [];
