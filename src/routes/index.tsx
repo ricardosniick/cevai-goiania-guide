@@ -368,7 +368,7 @@ function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: str
   // Old stored Google URLs expire: on load failure fall back to the existing "sem foto" look.
   const [broken, setBroken] = useState<string | null>(null);
   if (src && broken === src) src = null;
-  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(src)} className={`object-cover ${className}`} /> : <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
+  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(src)} className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
 }
 
 function Skeleton({ className }: { className: string }) { return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />; }
