@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { effectiveRadius, isInsideArea } from "./geo";
+import { splitByCache, withinBudget, PHOTO_NEW_PER_MINUTE } from "./photo-budget";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES } from "./categories";
@@ -234,16 +235,19 @@ export const resolvePlacePhotos = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(30) }).parse(data))
   .handler(async ({ data, context }) => {
-    const names = [...new Set(data.names)];
     const out: Record<string, string> = {};
-    if (!names.length) return out;
-    if (names.some((n) => !cacheGet(`${n}:600`))) {
-      try { await rateLimit(context.userId, "photos", 60, 60); } catch { /* over limit: show "sem foto" / old URL instead */
-        names.forEach((n) => { const c = cacheGet(`${n}:600`); if (c) out[n] = c; });
-        return out;
-      }
-    }
-    await Promise.all(names.map(async (n) => { const u = await photoUrl({ name: n }, 600); if (u) out[n] = u; }));
+    const { cached, missing } = splitByCache(data.names, (n) => !!cacheGet(`${n}:600`));
+    cached.forEach((n) => { const c = cacheGet(`${n}:600`); if (c) out[n] = c; });
+    if (!missing.length) return out;
+    // Each photo NOT in cache spends one slot of the per-person budget; over the limit, only cached photos are returned.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const grants = await Promise.all(missing.map(async () => {
+      const { data: ok, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: context.userId, _bucket: "photos_new", _max: PHOTO_NEW_PER_MINUTE, _window_seconds: 60 });
+      if (error) { console.error(`[rate-limit] check failed bucket=photos_new user=${context.userId}`, error); return true; }
+      return ok !== false;
+    }));
+    const allowed = withinBudget(missing, grants.filter(Boolean).length);
+    await Promise.all(allowed.map(async (n) => { const u = await photoUrl({ name: n }, 600); if (u) out[n] = u; }));
     return out;
   });
 
@@ -267,7 +271,7 @@ export const ensurePlace = createServerFn({ method: "POST" })
 export const startPresence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
-    placeId: z.string().min(3).max(300),
+    placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/),
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     accuracy: z.number().min(0).max(100000),
@@ -278,7 +282,6 @@ export const startPresence = createServerFn({ method: "POST" })
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
     await rateLimit(context.userId, "presence_try", 30, 3600, RATE_MSG, true);
-    await rateLimit(context.userId, "presence", 6, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -290,6 +293,8 @@ export const startPresence = createServerFn({ method: "POST" })
     if (!isInsideArea(data, g.location, radius)) throw new Error("Você precisa estar no local para usar “Estou aqui”.");
     const allowed = new Set(presenceInterests(category));
     const interests = data.mode === "meet" ? data.interests.filter((i) => allowed.has(i)) : [];
+    // Only accepted (on-site) attempts spend the 6/hour presence limit.
+    await rateLimit(context.userId, "presence", 6, 3600);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
@@ -304,7 +309,7 @@ export const startPresence = createServerFn({ method: "POST" })
 export const postSituation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({
-    placeId: z.string().min(3).max(300),
+    placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/),
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     accuracy: z.number().min(0).max(100000),

@@ -191,7 +191,8 @@ function ChatSheet({ requestId, name, onClose, notify }: { requestId: string; na
       const { error } = await supabase.rpc("send_chat_message", { _request_id: requestId, _body: body });
       if (error && isNetworkError(error)) { console.error("[erro] chat", error); return notify(OFFLINE_MSG); }
       if (error && error.message.includes("rate_limited")) return notify(RATE_LIMIT_MSG);
-      if (error) { console.error("[erro] chat", error); notify("A conexão terminou."); onClose(); return; }
+      if (error && error.message === "closed") { console.error("[erro] chat", error); notify("A conexão terminou."); onClose(); return; }
+      if (error) { console.error("[erro] chat", error); return notify("Não foi possível enviar."); }
     } catch (e) { return notify(friendlyError(e, "Não foi possível enviar.", "chat")); }
     setText(""); void msgs.refetch();
   };
