@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, BookOpen, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
+  ArrowLeft, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2 } from "lucide-react";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
@@ -29,7 +29,7 @@ import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapVie
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
-import { HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
+import { HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, allowsPresence } from "@/lib/categories";
 
 const emojiOf = emojiOfLabel;
 
