@@ -650,6 +650,17 @@ export type Database = {
           stall_id: string
         }[]
       }
+      update_experience: {
+        Args: {
+          _comment: string
+          _id: string
+          _is_public: boolean
+          _rating: number
+          _scores: Json
+          _would_return: boolean
+        }
+        Returns: undefined
+      }
       upsert_presence: {
         Args: {
           _interests: string[]

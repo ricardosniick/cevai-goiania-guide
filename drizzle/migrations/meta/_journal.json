@@ -50,6 +50,13 @@
       "when": 1791226460209,
       "tag": "0006_0006_post_situation_atomic",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791226603555,
+      "tag": "0007_0007_update_experience_rpc",
+      "breakpoints": true
     }
   ]
 }
