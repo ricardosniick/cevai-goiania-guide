@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { effectiveRadius, isInsideArea } from "./geo";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES } from "./categories";
@@ -285,15 +286,8 @@ export const startPresence = createServerFn({ method: "POST" })
     const category = categoryOf(g);
     if (!allowsPresence(category)) throw new Error("Este local não tem o recurso “Estou aqui”.");
     if (!g.location) throw new Error("Não foi possível confirmar a localização deste local.");
-    const R = 6371000, rad = (x: number) => (x * Math.PI) / 180;
-    const dist = (a: number, b: number, c: number, d: number) => 2 * R * Math.asin(Math.sqrt(Math.sin(rad(c - a) / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(rad(d - b) / 2) ** 2));
-    let radius = presenceRadius(category);
-    if (g.viewport && category === "Parques") {
-      const half = dist(g.viewport.low.latitude, g.viewport.low.longitude, g.viewport.high.latitude, g.viewport.high.longitude) / 2;
-      radius = Math.min(1500, Math.max(radius, half));
-    }
-    const d = dist(data.lat, data.lng, g.location.latitude, g.location.longitude);
-    if (d > radius + Math.min(data.accuracy, 50)) throw new Error("Você precisa estar no local para usar “Estou aqui”.");
+    const radius = effectiveRadius(presenceRadius(category), category, g.viewport);
+    if (!isInsideArea(data, g.location, radius)) throw new Error("Você precisa estar no local para usar “Estou aqui”.");
     const allowed = new Set(presenceInterests(category));
     const interests = data.mode === "meet" ? data.interests.filter((i) => allowed.has(i)) : [];
 
@@ -328,14 +322,8 @@ export const postSituation = createServerFn({ method: "POST" })
     const kind = situationKind(category, `${g.displayName?.text ?? ""} ${(g.types ?? []).join(" ")}`);
     if (!kind) throw new Error("Este local não tem “Situação agora”.");
     if (!g.location) throw new Error("Não foi possível confirmar a localização deste local.");
-    const R = 6371000, rad = (x: number) => (x * Math.PI) / 180;
-    const dist = (a: number, b: number, c: number, d: number) => 2 * R * Math.asin(Math.sqrt(Math.sin(rad(c - a) / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(rad(d - b) / 2) ** 2));
-    let radius = situationRadius(category);
-    if (g.viewport && category === "Parques") {
-      const half = dist(g.viewport.low.latitude, g.viewport.low.longitude, g.viewport.high.latitude, g.viewport.high.longitude) / 2;
-      radius = Math.min(1500, Math.max(radius, half));
-    }
-    if (dist(data.lat, data.lng, g.location.latitude, g.location.longitude) > radius + Math.min(data.accuracy, 50)) throw new Error("Você precisa estar no local para informar a situação.");
+    const radius = effectiveRadius(situationRadius(category), category, g.viewport);
+    if (!isInsideArea(data, g.location, radius)) throw new Error("Você precisa estar no local para informar a situação.");
     const allowed = new Set(SITUATION_OPTIONS[kind]);
     const situations = [...new Set(data.situations.filter((s) => allowed.has(s)))];
     if (!situations.length) throw new Error("Escolha uma situação.");
