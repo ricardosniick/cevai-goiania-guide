@@ -318,7 +318,6 @@ export const postSituation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
-    await rateLimit(context.userId, "situation", 10, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -338,13 +337,12 @@ export const postSituation = createServerFn({ method: "POST" })
     const allowed = new Set(SITUATION_OPTIONS[kind]);
     const situations = [...new Set(data.situations.filter((s) => allowed.has(s)))];
     if (!situations.length) throw new Error("Escolha uma situação.");
-    // Per-place 10-min limit only counts real publications (after the on-site check).
-    await rateLimit(context.userId, `situation:${data.placeId}`, 1, 600, "Você atualizou há pouco. Tente de novo em alguns minutos.");
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
-    const now = Date.now();
-    const { error } = await supabaseAdmin.from("place_situations").insert({ place_id: g.id, user_id: context.userId, kind, situations, created_at: new Date(now).toISOString(), expires_at: new Date(now + 2 * 3600 * 1000).toISOString() });
+    // Both limits (10 min per place, 10/hour per person) and the insert run in one locked DB operation; only accepted posts count.
+    const { data: result, error } = await supabaseAdmin.rpc("post_situation", { _user: context.userId, _place_id: g.id!, _kind: kind, _situations: situations });
     if (error) { console.error(error); throw new Error("Não foi possível publicar a situação."); }
+    if (result === "recent") throw new Error("Você atualizou há pouco. Tente de novo em alguns minutos.");
+    if (result === "hourly") throw new Error(RATE_MSG);
     return { ok: true };
   });
