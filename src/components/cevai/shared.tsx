@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { ArrowLeft, ChevronRight, Image as ImageIcon, Lock, Star } from "lucide-react";
+import { useState, type InputHTMLAttributes } from "react";
+import { ArrowLeft, ChevronRight, Heart, Image as ImageIcon, Lock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GROUPS, filterLabel, filterEmoji } from "@/lib/categories";
+import type { PlaceStat } from "@/components/cevai/types";
 
 export function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares reais, ver fotos e registrar experiências." }: { onLogin: () => void; text?: string }) {
   return <div className="mx-5 mt-6 rounded-2xl bg-primary p-6 text-primary-foreground">
@@ -54,4 +55,14 @@ export function ListError({ onRetry }: { onRetry: () => void }) {
 
 export function Stars({ value, size = 14 }: { value: number; size?: number }) {
   return <span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <Star key={n} size={size} className={n <= value ? "fill-secondary text-secondary" : "text-border"} />)}</span>;
+}
+
+export function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
+  return <label className="block"><span className="mb-1.5 block text-xs font-bold text-foreground/80">{label}</span><input {...props} className="h-12 w-full rounded-xl border border-input bg-card px-4 text-[15px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" /></label>;
+}
+
+export const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
+export function CeVaiRating({ stat }: { stat?: PlaceStat | undefined }) {
+  if (!stat?.count) return <span className="text-[11px] font-semibold italic text-muted-foreground">Ainda sem experiências no Cê Vai?</span>;
+  return <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-primary"><Heart size={11} className="fill-secondary text-secondary" />{fmt1(stat.avg)} · Cê Vai? · {stat.count} {stat.count === 1 ? "experiência" : "experiências"}</span>;
 }

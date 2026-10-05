@@ -14,3 +14,5 @@ export type Experience = {
   photos: string[];
   photoItems: Array<{ path: string; url: string }>;
 };
+
+export type PlaceStat = { avg: number; count: number };
