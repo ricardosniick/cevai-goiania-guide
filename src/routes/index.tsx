@@ -4,7 +4,7 @@ import {
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2 } from "lucide-react";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { friendlyError } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
-import { getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { getPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
