@@ -28,17 +28,18 @@
 - [x] Etapa 2 — `places` gravado só pelo servidor (dados do Google); RLS sem insert/update para usuários.
 - [x] Etapa 3a — Limites por usuário (busca 30/min, detalhes 60/min, lugar novo 20/min, presença 6/h, situação 1/10min por lugar + 10/h).
 - [x] Etapa 3b — Fotos: capa na lista, cache 500/30min, photo_name no lugar, fallback "sem foto".
-- [ ] Etapa 4 — Presença, situação e edição de notas atômicas.
-- [ ] Etapa 5 — Tratar erros ignorados com aviso ao usuário.
-- [ ] Etapa 6 — Limites no chat/conexões, bloqueio no chat, denúncias únicas, auto-ocultar situação, people_here.
-- [ ] Etapa 7 — Extrair geo.ts e dividir index.tsx aos poucos.
-- [ ] Etapa 8 — Testes de geo e categorias.
-- [ ] Etapa 9 — lang pt-BR, telas de erro em português, viewport-fit=cover.
+- [x] Etapa 4 — Presença, situação e edição de notas atômicas.
+- [x] Etapa 5 — Tratar erros ignorados com aviso ao usuário.
+- [x] Etapa 6 — Limites no chat/conexões, bloqueio no chat, denúncias únicas, auto-ocultar situação, people_here.
+- [x] Etapa 7 — geo.ts extraído; divisão do index.tsx pausada após a 7B-4.
+- [x] Etapa 8 — Testes de geo e categorias.
+- [x] Etapa 9 — lang pt-BR, telas de erro em português, viewport-fit=cover.
 
-## Parte 7B (aprovada com ajustes)
-- [x] 7B-1 tipos/utilidades, Logo, ManageCtx (manage-context.ts)
-- [ ] 7B-2 peças comuns + Stars + usePlaces
-- [ ] 7B-3 dados · 7B-4 Livros/Barraquinhas · 7B-5 auth · 7B-6 Explorar/Mapa · 7B-7 cards (só imports do ManageCtx)
-- [ ] 7B-8a Salvos · 7B-8b Perfil · 7B-8c Página do lugar (cada um espera ok)
-- [ ] 7B-9 ExperienceModal · 7B-10 shell/BottomNav
-- [ ] Depois: distanceKm/formatKm reaproveitar geo.ts (passo separado) · 7C Prettier
+## Parte 7B — PAUSADA após a 7B-4 (decisão do usuário)
+- [x] 7B-1 tipos (types.ts), ManageCtx (manage-context.ts), Logo, distanceKm/formatKm (lib/geo-format.ts)
+- [x] 7B-2 usePlaces (hooks/usePlaces.ts); peças comuns + Stars (cevai/shared.tsx)
+- [x] 7B-3 loadExperiences, withFreshPhotos, useSaved (hooks/useExperiences.ts)
+- [x] 7B-4 BooksPanel.tsx, StallsPanel.tsx (+ Field, CeVaiRating, fmt1 em shared.tsx; PlaceStat em types.ts)
+- Continua no index.tsx: shell CeVaiApp + BottomNav, auth (Welcome/Login/Signup/Forgot/NewPassword), Explorar (HomeScreen, usePlaceStats, GoogleRating, PlaceRow), Mapa, Página do lugar (DetailScreen), ExperienceCard/Menu, Salvos, Perfil, ExperienceModal.
+- [ ] Pausado (só retomar se o usuário pedir): 7B-5 auth · 7B-6 Explorar/Mapa · 7B-7 cards · 7B-8a/b/c · 7B-9 modal · 7B-10 shell · distanceKm via geo.ts · 7C Prettier
+- [ ] Separado: aviso do markerclusterer no servidor de desenvolvimento (só preview).
