@@ -34,3 +34,11 @@
 - [ ] Etapa 7 — Extrair geo.ts e dividir index.tsx aos poucos.
 - [ ] Etapa 8 — Testes de geo e categorias.
 - [ ] Etapa 9 — lang pt-BR, telas de erro em português, viewport-fit=cover.
+
+## Parte 7B (aprovada com ajustes)
+- [ ] 7B-1 tipos/utilidades, Logo, ManageCtx (manage-context.ts)
+- [ ] 7B-2 peças comuns + Stars + usePlaces
+- [ ] 7B-3 dados · 7B-4 Livros/Barraquinhas · 7B-5 auth · 7B-6 Explorar/Mapa · 7B-7 cards (só imports do ManageCtx)
+- [ ] 7B-8a Salvos · 7B-8b Perfil · 7B-8c Página do lugar (cada um espera ok)
+- [ ] 7B-9 ExperienceModal · 7B-10 shell/BottomNav
+- [ ] Depois: distanceKm/formatKm reaproveitar geo.ts (passo separado) · 7C Prettier
