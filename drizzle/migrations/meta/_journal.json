@@ -57,6 +57,13 @@
       "when": 1791226603555,
       "tag": "0007_0007_update_experience_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791227437687,
+      "tag": "0008_0008_social_limits",
+      "breakpoints": true
     }
   ]
 }
