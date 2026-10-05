@@ -621,6 +621,15 @@ export type Database = {
           updated_at: string
         }[]
       }
+      post_situation: {
+        Args: {
+          _kind: string
+          _place_id: string
+          _situations: string[]
+          _user: string
+        }
+        Returns: string
+      }
       respond_connection: {
         Args: { _action: string; _id: string }
         Returns: undefined
