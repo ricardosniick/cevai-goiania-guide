@@ -36,6 +36,13 @@
       "when": 1791225802376,
       "tag": "0004_places_photo_name",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791226331521,
+      "tag": "0005_0005_upsert_presence",
+      "breakpoints": true
     }
   ]
 }
