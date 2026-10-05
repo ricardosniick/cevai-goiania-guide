@@ -13,6 +13,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import flamboyantReal from "@/assets/goiania-flamboyant-real.jpg.asset.json";
 import welcomeArt from "@/assets/ce-vai-welcome.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
+import { LIST_LABELS, type Screen, type MainScreen, type LatLng, type SavedList, type Stall, type Experience } from "@/components/cevai/types";
+import { ManageCtx } from "@/components/cevai/manage-context";
+import { Logo } from "@/components/cevai/Logo";
+import { distanceKm, formatKm } from "@/lib/geo-format";
 import { friendlyError } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { searchPlaces, getPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
@@ -22,26 +26,7 @@ import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/Si
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
 import { GROUPS, HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, STALL_KINDS, allowsPresence } from "@/lib/categories";
 
-type Screen = "welcome" | "login" | "signup" | "signup-done" | "forgot" | "new-password" | "home" | "map" | "detail" | "saved" | "profile" | "categories";
-type MainScreen = "home" | "map" | "saved" | "profile";
-type LatLng = { lat: number; lng: number };
-type SavedList = "quero_conhecer" | "ja_fui" | "favoritos";
-
 const emojiOf = emojiOfLabel;
-
-const LIST_LABELS: Record<SavedList, string> = { quero_conhecer: "Quero conhecer", ja_fui: "Já fui", favoritos: "Favoritos" };
-
-type Stall = { id: string; place_id: string; name: string; kind: string; emoji: string; created_by: string };
-type Experience = {
-  id: string; place_id: string; stall_id: string | null; stall: { name: string; emoji: string } | null; category: string; rating: number; comment: string | null; would_return: boolean; is_public: boolean; created_at: string; user_id: string;
-  place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
-  scores: Array<{ criterion: string; score: number }>;
-  photos: string[];
-  photoItems: Array<{ path: string; url: string }>;
-};
-
-/** Lets cards owned by the signed-in user open the edit form and refresh lists after changes. */
-const ManageCtx = createContext<{ user: User; notify: (m: string) => void; onEdit: (e: Experience) => void } | null>(null);
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -54,18 +39,6 @@ export const Route = createFileRoute("/")({
   ]}),
   component: CeVaiApp,
 });
-
-function distanceKm(a: LatLng, b: LatLng) {
-  const r = (d: number) => (d * Math.PI) / 180;
-  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
-  return 12742 * Math.asin(Math.sqrt(h));
-}
-const formatKm = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1).replace(".", ",")} km`);
-
-function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const cls = size === "lg" ? "text-[2.6rem]" : size === "sm" ? "text-xl" : "text-2xl";
-  return <span className={`font-display font-black leading-none tracking-tight ${cls}`}><span className="text-primary">Cê</span> <span className="text-secondary">Vai?</span></span>;
-}
 
 /* ---------------- App shell ---------------- */
 
