@@ -283,7 +283,6 @@ export const postSituation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
-    await rateLimit(context.userId, `situation:${data.placeId}`, 1, 600, "Você atualizou há pouco. Tente de novo em alguns minutos.");
     await rateLimit(context.userId, "situation", 10, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
@@ -304,6 +303,8 @@ export const postSituation = createServerFn({ method: "POST" })
     const allowed = new Set(SITUATION_OPTIONS[kind]);
     const situations = [...new Set(data.situations.filter((s) => allowed.has(s)))];
     if (!situations.length) throw new Error("Escolha uma situação.");
+    // Per-place 10-min limit only counts real publications (after the on-site check).
+    await rateLimit(context.userId, `situation:${data.placeId}`, 1, 600, "Você atualizou há pouco. Tente de novo em alguns minutos.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
