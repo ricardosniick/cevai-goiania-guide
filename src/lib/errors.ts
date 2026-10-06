@@ -27,6 +27,6 @@ export function authErrorMessage(err: unknown, fallback: string, context = "auth
   const e = (typeof err === "object" && err ? err : {}) as { code?: unknown; message?: unknown };
   const code = typeof e.code === "string" ? e.code : "";
   if (AUTH_MESSAGES[code]) return AUTH_MESSAGES[code];
-  if (typeof e.message === "string" && e.message.includes("registered")) return AUTH_MESSAGES.user_already_exists!;
+  if (typeof e.message === "string" && e.message.includes("registered")) return AUTH_MESSAGES["user_already_exists"]!;
   return friendlyError(err, fallback, context);
 }
