@@ -22,7 +22,7 @@ import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { distanceKm, formatKm } from "@/lib/geo-format";
-import { friendlyError } from "@/lib/errors";
+import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { getPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
@@ -243,13 +243,13 @@ function SignupScreen({ onBack, onLogin, onDone, notify }: { onBack: () => void;
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin, data: { full_name: name.trim() } } });
-      if (error) return notify(error.message.includes("registered") ? "Este e-mail já tem conta." : friendlyError(error, "Não foi possível criar a conta.", "signup"));
+      if (error) return notify(authErrorMessage(error, "Não foi possível criar a conta.", "signup"));
       if (data.session && data.user) {
         const { error: pErr } = await supabase.from("profiles").upsert({ user_id: data.user.id, full_name: name.trim() }, { onConflict: "user_id" });
         if (pErr) notify(friendlyError(pErr, "Conta criada, mas não foi possível salvar seu nome.", "profile upsert"));
       }
       onDone(data.session ? data.user : null);
-    } catch (e) { notify(friendlyError(e, "Não foi possível criar a conta.", "signup")); } finally { setLoading(false); }
+    } catch (e) { notify(authErrorMessage(e, "Não foi possível criar a conta.", "signup")); } finally { setLoading(false); }
   };
   return <AuthLayout onBack={onBack}>
     <h1 className="mt-8 font-display text-[1.75rem] font-black leading-tight">Criar sua conta</h1>
@@ -291,7 +291,7 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
   const [password, setPassword] = useState("");
   return <AuthLayout onBack={onDone}>
     <h1 className="mt-8 font-display text-[1.75rem] font-black">Nova senha</h1>
-    <form className="mt-8 space-y-4" onSubmit={async (e) => { e.preventDefault(); const { error } = await supabase.auth.updateUser({ password }); if (error) return notify("Não foi possível alterar a senha."); notify("Senha alterada!"); onDone(); }}>
+    <form className="mt-8 space-y-4" onSubmit={async (e) => { e.preventDefault(); const { error } = await supabase.auth.updateUser({ password }); if (error) return notify(error.code === "weak_password" ? authErrorMessage(error, "Não foi possível alterar a senha.", "new password") : friendlyError(error, "Não foi possível alterar a senha.", "new password")); notify("Senha alterada!"); onDone(); }}>
       <PasswordField label="Nova senha" value={password} onChange={setPassword} autoComplete="new-password" />
       <Button type="submit" disabled={password.length < 6} className="h-12 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Salvar senha</Button>
     </form>
