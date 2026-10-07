@@ -113,3 +113,40 @@ describe("resolveFilter", () => {
     }
   });
 });
+
+describe("leisure focus (hidden categories)", () => {
+  it("hides Auto and Saúde groups and Lojas/Supermercados", async () => {
+    const c = await import("./categories");
+    expect(c.ACTIVE_GROUPS.map((g) => g.key)).not.toContain("auto");
+    expect(c.ACTIVE_GROUPS.map((g) => g.key)).not.toContain("saude");
+    const compras = c.ACTIVE_GROUPS.find((g) => g.key === "compras")!;
+    expect(c.activeSubs(compras).map((s) => s.key)).toEqual(["shoppings", "livrarias", "sebos"]);
+  });
+  it("keeps hidden entries in code", async () => {
+    const c = await import("./categories");
+    expect(c.GROUPS.find((g) => g.key === "saude")?.hidden).toBe(true);
+    expect(c.findFilter("hospitais")).not.toBeNull();
+  });
+  it("chips show only active groups", async () => {
+    const c = await import("./categories");
+    expect(c.HOME_CHIPS).toEqual(["comer", "cafes-g", "feiras", "compras"]);
+    expect(c.MAP_CHIPS).not.toContain("auto");
+    expect(c.MAP_CHIPS).not.toContain("saude");
+  });
+  it("Destaques types exclude hidden categories", async () => {
+    const c = await import("./categories");
+    for (const t of ["hospital", "pharmacy", "gas_station", "supermarket", "clothing_store"]) expect(c.ALL_PLACE_TYPES).not.toContain(t);
+    expect(c.ALL_PLACE_TYPES).toContain("park");
+    expect(c.ALL_PLACE_TYPES).toContain("restaurant");
+  });
+  it("Compras filter uses only active subs", async () => {
+    const c = await import("./categories");
+    expect(c.resolveFilter("compras").types).toEqual(["shopping_mall", "book_store"]);
+  });
+  it("text search filter drops hidden-only places", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlaceTypes(["hospital", "point_of_interest"])).toBe(false);
+    expect(c.isActivePlaceTypes(["book_store", "store"])).toBe(true);
+    expect(c.isActivePlaceTypes(["night_club"])).toBe(true);
+  });
+});
