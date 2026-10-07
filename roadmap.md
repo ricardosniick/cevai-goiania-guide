@@ -1,5 +1,10 @@
 # Roadmap
 
+## Nome do app e emails de autenticação
+- [x] Usar “Cê vai” no logo em texto, títulos, metadados, compartilhamento, nome de instalação e README.
+- [ ] Nome do projeto no editor: alterar manualmente nas configurações do projeto; não há ação de renomeação disponível nesta sessão.
+- [ ] Emails de autenticação em português, remetente “Cê vai” e identidade visual: aguardam configuração de um domínio de envio próprio no Cloud → Emails; depois criar os seis templates gerenciados e aplicar os textos solicitados.
+
 - [x] Conectar Splash ao Feed.
 - [x] Filtrar lugares pelas categorias do Feed.
 - [x] Conectar pins e cards do Mapa aos Detalhes.

@@ -34,9 +34,9 @@ const emojiOf = emojiOfLabel;
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
-    { title: "Cê Vai? — O mapa das suas escolhas" },
+    { title: "Cê vai — O mapa das suas escolhas" },
     { name: "description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
-    { property: "og:title", content: "Cê Vai? — O mapa das suas escolhas" },
+    { property: "og:title", content: "Cê vai — O mapa das suas escolhas" },
     { property: "og:description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },
@@ -439,7 +439,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
         {p ? <PlacePhoto src={p.photoUrl} alt={p.name} className="h-full w-full" /> : <Skeleton className="h-full rounded-none" />}
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-transparent to-foreground/20" />
         <button onClick={onBack} aria-label="Voltar" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><ArrowLeft size={20} /></button>
-        <button aria-label="Compartilhar lugar" onClick={async () => { const url = shareUrlFor(placeId); try { if (navigator.share) await navigator.share({ title: p?.name ?? "Cê Vai?", text: p ? `${p.name} no Cê Vai?` : "Olha esse lugar no Cê Vai?", url }); else { await navigator.clipboard.writeText(url); notify("Link copiado!"); } } catch { /* cancelado */ } }} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><Share2 size={18} /></button>
+        <button aria-label="Compartilhar lugar" onClick={async () => { const url = shareUrlFor(placeId); try { if (navigator.share) await navigator.share({ title: p?.name ?? "Cê vai", text: p ? `${p.name} no Cê vai` : "Olha esse lugar no Cê vai", url }); else { await navigator.clipboard.writeText(url); notify("Link copiado!"); } } catch { /* cancelado */ } }} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><Share2 size={18} /></button>
         {p && <div className="absolute inset-x-5 bottom-4 text-primary-foreground"><p className="text-xs font-extrabold uppercase tracking-wider text-secondary">{emojiOf(p.category)} {p.typeLabel || p.category}</p><h1 className="mt-1 font-display text-[1.7rem] font-black leading-tight">{p.name}</h1></div>}
       </div>
       {!user && <LoginPrompt onLogin={onBack} />}

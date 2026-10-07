@@ -1,6 +1,6 @@
-# Welcome to your Lovable project
+# Cê vai
 
-This project was built with [Lovable](https://lovable.dev).
+App para descobrir lugares de Goiânia, salvar favoritos e registrar experiências privadas. Criado com [Lovable](https://lovable.dev).
 
 ## Build with Lovable
 

@@ -78,16 +78,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cê Vai? — Descubra Goiânia" },
+      { title: "Cê vai — Descubra Goiânia" },
       { name: "description", content: "Descubra, salve e registre os melhores lugares de Goiânia." },
-      { name: "author", content: "Cê Vai?" },
-      { property: "og:title", content: "Cê Vai? — Descubra Goiânia" },
+      { name: "author", content: "Cê vai" },
+      { property: "og:title", content: "Cê vai — Descubra Goiânia" },
       { property: "og:description", content: "Descubra, salve e registre os melhores lugares de Goiânia." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#123A32" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "Cê Vai?" },
+      { name: "apple-mobile-web-app-title", content: "Cê vai" },
     ],
     links: [
       {
