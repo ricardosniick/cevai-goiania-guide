@@ -34,9 +34,9 @@ const emojiOf = emojiOfLabel;
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
-    { title: "Cê Vai? — O mapa das suas escolhas" },
+    { title: "Cê vai — O mapa das suas escolhas" },
     { name: "description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
-    { property: "og:title", content: "Cê Vai? — O mapa das suas escolhas" },
+    { property: "og:title", content: "Cê vai — O mapa das suas escolhas" },
     { property: "og:description", content: "Descubra lugares reais de Goiânia, registre onde você foi e diga se vale a pena voltar." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },
@@ -172,7 +172,7 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   return <section className="relative h-full overflow-hidden bg-primary">
-    <img src={welcomeArt.url} className="absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]" alt="Cê Vai? — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
+    <img src={welcomeArt.url} className="absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]" alt="Cê vai — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
     <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-primary via-primary/80 to-transparent" />
     <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="space-y-3">
@@ -439,7 +439,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
         {p ? <PlacePhoto src={p.photoUrl} alt={p.name} className="h-full w-full" /> : <Skeleton className="h-full rounded-none" />}
         <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-transparent to-foreground/20" />
         <button onClick={onBack} aria-label="Voltar" className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><ArrowLeft size={20} /></button>
-        <button aria-label="Compartilhar lugar" onClick={async () => { const url = shareUrlFor(placeId); try { if (navigator.share) await navigator.share({ title: p?.name ?? "Cê Vai?", text: p ? `${p.name} no Cê Vai?` : "Olha esse lugar no Cê Vai?", url }); else { await navigator.clipboard.writeText(url); notify("Link copiado!"); } } catch { /* cancelado */ } }} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><Share2 size={18} /></button>
+        <button aria-label="Compartilhar lugar" onClick={async () => { const url = shareUrlFor(placeId); try { if (navigator.share) await navigator.share({ title: p?.name ?? "Cê vai", text: p ? `${p.name} no Cê vai` : "Olha esse lugar no Cê vai", url }); else { await navigator.clipboard.writeText(url); notify("Link copiado!"); } } catch { /* cancelado */ } }} className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] grid size-10 place-items-center rounded-full bg-background/95 shadow"><Share2 size={18} /></button>
         {p && <div className="absolute inset-x-5 bottom-4 text-primary-foreground"><p className="text-xs font-extrabold uppercase tracking-wider text-secondary">{emojiOf(p.category)} {p.typeLabel || p.category}</p><h1 className="mt-1 font-display text-[1.7rem] font-black leading-tight">{p.name}</h1></div>}
       </div>
       {!user && <LoginPrompt onLogin={onBack} />}
@@ -450,7 +450,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
           <p className="mt-1 text-xs font-bold text-muted-foreground">{formatKm(distanceKm(center, p))} de você</p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-2xl border border-border bg-muted/60 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avaliação do Google</p><p className="mt-1 text-sm font-black"><GoogleRating rating={p.rating} count={p.ratingCount} size="md" /></p><p className="mt-1 text-[10px] text-muted-foreground">Informação externa</p></div>
-            <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê Vai?</p>{(() => { const st = stats.data?.[p.id]; return st?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(st.avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{st.count} {st.count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê Vai?.</p>; })()}</div>
+            <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê vai</p>{(() => { const st = stats.data?.[p.id]; return st?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(st.avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{st.count} {st.count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê vai.</p>; })()}</div>
           </div>
           {user && <SituationPanel user={user} place={p} notify={notify} />}
         </div>
@@ -469,7 +469,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
             <p className="text-[10px] text-muted-foreground">Informações do Google Maps.</p>
           </div>}
           {tab === "Experiências" && <div>
-            <h2 className="font-display text-lg font-black">Experiências no Cê Vai?</h2>
+            <h2 className="font-display text-lg font-black">Experiências no Cê vai</h2>
             <p className="mt-1 text-xs text-muted-foreground">Suas experiências são privadas. Aqui aparecem as suas e as que outras pessoas escolheram compartilhar.</p>
             <div className="mt-4 space-y-3">
               {experiences.data?.filter((e) => !e.stall_id).length ? experiences.data.filter((e) => !e.stall_id).map((e) => <ExperienceCard key={e.id} exp={e} own={e.user_id === user?.id} />) : <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência.</div>}
