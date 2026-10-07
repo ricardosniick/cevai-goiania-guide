@@ -194,7 +194,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
       });
     }
     const forced = !data.query && filter.label ? filter.label : undefined;
-    const raw = data.query && RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace(p.types ?? [], p.displayName?.text ?? "")) : (result.places ?? []);
+    const raw = data.query && RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace([p.primaryType, ...(p.types ?? [])].filter(Boolean) as string[], p.displayName?.text ?? "")) : (result.places ?? []);
     const places = await Promise.all(raw.slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
