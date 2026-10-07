@@ -86,6 +86,8 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
     const g = (window as any).google;
     pins.current.forEach((m) => m.setMap(null));
     clusterer.current?.clearMarkers();
+    // Places whose coordinates expired (lat/lng null) are never drawn, so nothing lands at (0,0).
+    markers = markers.filter(hasCoords);
     pins.current = markers.map((m) => {
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({

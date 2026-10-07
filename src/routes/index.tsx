@@ -130,7 +130,7 @@ function CeVaiApp() {
   return (
     <main className="fixed inset-0 overflow-hidden bg-background">
       <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
-        <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? 0, lng: e.place?.lng ?? 0, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
+        <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? NaN, lng: e.place?.lng ?? NaN, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "", created_by: "" } : null }) } : null}>
         <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
           {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
           {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
@@ -581,7 +581,7 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
   const photos = list.flatMap((e) => e.photos);
   const markers = useMemo<MapMarker[]>(() => {
     const seen = new Set<string>();
-    return list.filter((e) => e.place?.lat != null && !seen.has(e.place_id) && seen.add(e.place_id)).map((e) => ({ id: e.place_id, lat: e.place!.lat!, lng: e.place!.lng!, category: e.category, label: e.place!.name }));
+    return list.filter((e) => e.place?.lat != null && e.place?.lng != null && !seen.has(e.place_id) && seen.add(e.place_id)).map((e) => ({ id: e.place_id, lat: e.place!.lat!, lng: e.place!.lng!, category: e.category, label: e.place!.name }));
   }, [list]);
   if (!user) return <section className="h-full overflow-y-auto pt-[max(1.25rem,env(safe-area-inset-top))]"><h1 className="px-5 font-display text-[1.75rem] font-black">Perfil</h1><LoginPrompt onLogin={onLogin} text="Entre para ver suas experiências, fotos e o mapa dos lugares onde você foi." /></section>;
   return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
