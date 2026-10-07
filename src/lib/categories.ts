@@ -1,6 +1,7 @@
 // Shared category taxonomy (client + server). Google types must be valid Places API (New) Table A types.
-export type Sub = { key: string; label: string; emoji: string; types?: string[]; text?: string };
-export type Group = { key: string; label: string; chip: string; emoji: string; color: string; subs: Sub[]; text?: string };
+// hidden: true keeps an entry in code (for reactivation) but removes it from chips, lists, filters and Google requests.
+export type Sub = { key: string; label: string; emoji: string; types?: string[]; text?: string; hidden?: boolean };
+export type Group = { key: string; label: string; chip: string; emoji: string; color: string; subs: Sub[]; text?: string; hidden?: boolean };
 
 export const GROUPS: Group[] = [
   { key: "comer", label: "Alimentação", chip: "Comer", emoji: "🍴", color: "#E86024", subs: [
@@ -20,7 +21,7 @@ export const GROUPS: Group[] = [
     { key: "feiras-livres", label: "Feiras livres", emoji: "🥬", text: "feira livre" },
     { key: "eventos-rua", label: "Eventos de rua", emoji: "🎪", text: "evento de rua" },
   ] },
-  { key: "auto", label: "Automotivo", chip: "Auto", emoji: "🚗", color: "#4B5563", subs: [
+  { key: "auto", label: "Automotivo", chip: "Auto", emoji: "🚗", color: "#4B5563", hidden: true, subs: [
     { key: "mecanicas", label: "Mecânicas", emoji: "🔧", types: ["car_repair"] },
     { key: "postos", label: "Postos de combustível", emoji: "⛽", types: ["gas_station"] },
     { key: "autopecas", label: "Autopeças", emoji: "⚙️", types: ["auto_parts_store"] },
@@ -28,7 +29,7 @@ export const GROUPS: Group[] = [
     { key: "estetica", label: "Estética automotiva", emoji: "✨", text: "estética automotiva" },
     { key: "lava", label: "Lava-rápidos", emoji: "🫧", types: ["car_wash"] },
   ] },
-  { key: "saude", label: "Saúde", chip: "Saúde", emoji: "🏥", color: "#D23C4B", subs: [
+  { key: "saude", label: "Saúde", chip: "Saúde", emoji: "🏥", color: "#D23C4B", hidden: true, subs: [
     { key: "clinicas", label: "Clínicas", emoji: "🩺", text: "clínica médica" },
     { key: "hospitais", label: "Hospitais", emoji: "🏥", types: ["hospital"] },
     { key: "laboratorios", label: "Laboratórios", emoji: "🧪", types: ["medical_lab"] },
@@ -36,9 +37,9 @@ export const GROUPS: Group[] = [
     { key: "farmacias", label: "Farmácias", emoji: "💊", types: ["pharmacy"] },
   ] },
   { key: "compras", label: "Compras", chip: "Compras", emoji: "🛍️", color: "#B0377A", subs: [
-    { key: "lojas", label: "Lojas", emoji: "🛍️", types: ["clothing_store", "store"] },
+    { key: "lojas", label: "Lojas", emoji: "🛍️", types: ["clothing_store", "store"], hidden: true },
     { key: "shoppings", label: "Shoppings", emoji: "🏬", types: ["shopping_mall"] },
-    { key: "supermercados", label: "Supermercados", emoji: "🛒", types: ["supermarket", "grocery_store"] },
+    { key: "supermercados", label: "Supermercados", emoji: "🛒", types: ["supermarket", "grocery_store"], hidden: true },
     { key: "livrarias", label: "Livrarias", emoji: "📚", types: ["book_store"] },
     { key: "sebos", label: "Sebos", emoji: "📖", text: "sebo livros usados" },
   ] },
@@ -71,8 +72,13 @@ export const GROUPS: Group[] = [
 // "Cafés" chip reuses the Alimentação sub
 GROUPS[1]!.subs = [GROUPS[0]!.subs[1]!];
 
-export const HOME_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras"];
-export const MAP_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras", "lazer", "esporte", "hospedagem", "conhecimento"];
+export const isGroupActive = (g: Group) => !g.hidden;
+export const activeSubs = (g: Group) => g.subs.filter((s) => !s.hidden);
+/** Groups shown in the app (hidden groups stay in GROUPS for later reactivation). */
+export const ACTIVE_GROUPS: Group[] = GROUPS.filter(isGroupActive);
+const isChipActive = (key: string) => ACTIVE_GROUPS.some((g) => g.key === key);
+export const HOME_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras"].filter(isChipActive);
+export const MAP_CHIPS = ["comer", "cafes-g", "feiras", "auto", "saude", "compras", "lazer", "esporte", "hospedagem", "conhecimento"].filter(isChipActive);
 
 export function findFilter(key: string): { group: Group; sub: Sub | null } | null {
   for (const g of GROUPS) {
@@ -92,17 +98,25 @@ export function resolveFilter(key: string | undefined): { types?: string[]; text
   if (!f) return {};
   if (f.sub) return f.sub.text ? { text: f.sub.text, label: f.sub.label } : { types: f.sub.types ?? [], label: f.sub.label };
   if (f.group.text) return { text: f.group.text, label: f.group.subs[0]?.label ?? f.group.chip };
-  return { types: Array.from(new Set(f.group.subs.flatMap((s) => s.types ?? []))) };
+  return { types: Array.from(new Set(activeSubs(f.group).flatMap((s) => s.types ?? []))) };
 }
 
 const ALL_SUBS = GROUPS.flatMap((g) => g.subs.map((s) => ({ s, g })));
 /** Google types for "Todos": round-robin across groups so every group is represented (Nearby Search accepts max 50). */
 export const ALL_PLACE_TYPES: string[] = (() => {
-  const lists = GROUPS.map((g) => Array.from(new Set(g.subs.flatMap((s) => s.types ?? []))));
+  const lists = ACTIVE_GROUPS.map((g) => Array.from(new Set(activeSubs(g).flatMap((s) => s.types ?? []))));
   const out = new Set<string>();
   for (let i = 0; out.size < 50 && lists.some((l) => l[i]); i++) for (const l of lists) { const t = l[i]; if (t && out.size < 50) out.add(t); }
   return [...out];
 })();
+const ACTIVE_TYPES = new Set(ACTIVE_GROUPS.flatMap((g) => activeSubs(g).flatMap((s) => s.types ?? [])));
+// Types only used by hidden categories (generic "store" excluded: bookstores and malls carry it too).
+const HIDDEN_ONLY_TYPES = new Set([...GROUPS.flatMap((g) => g.subs.filter((s) => g.hidden || s.hidden).flatMap((s) => s.types ?? [])), "doctor", "medical_clinic"].filter((t) => t !== "store" && !ACTIVE_TYPES.has(t)));
+/** True unless a Google place clearly belongs only to hidden categories (e.g. hospitals, gas stations). */
+export function isActivePlaceTypes(types: string[]): boolean {
+  if (types.some((t) => ACTIVE_TYPES.has(t))) return true;
+  return !types.some((t) => HIDDEN_ONLY_TYPES.has(t));
+}
 /** Label a Google place by its types. */
 export function categoryFromTypes(types: string[], name = ""): string {
   if (/\bfeira\b/i.test(name)) return "Feiras";

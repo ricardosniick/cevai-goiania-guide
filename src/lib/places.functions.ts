@@ -3,7 +3,9 @@ import { effectiveRadius, isInsideArea } from "./geo";
 import { splitByCache, withinBudget, PHOTO_NEW_PER_MINUTE } from "./photo-budget";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES } from "./categories";
+import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES, isActivePlaceTypes } from "./categories";
+/** Free-text search keeps only places of active categories; set false to revert. */
+export const RESTRICT_TEXT_TO_ACTIVE = true;
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 export const GOIANIA = { lat: -16.6869, lng: -49.2648 };
@@ -192,7 +194,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
       });
     }
     const forced = !data.query && filter.label ? filter.label : undefined;
-    const places = await Promise.all((result.places ?? []).slice(0, 20).map((p) => toSummary(p, 600, forced)));
+    const raw = data.query && RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlaceTypes(p.types ?? [])) : (result.places ?? []);
+    const places = await Promise.all(raw.slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
