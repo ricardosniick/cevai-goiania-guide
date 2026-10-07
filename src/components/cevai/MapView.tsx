@@ -5,6 +5,8 @@ import { colorOfLabel } from "@/lib/categories";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string | undefined };
 
+/** True only for real coordinates (expired ones are null/NaN; (0,0) is never a valid place here). */
+export const hasCoords = (m: { lat: number | null; lng: number | null }) => Number.isFinite(m.lat) && Number.isFinite(m.lng) && !(m.lat === 0 && m.lng === 0);
 export const CATEGORY_COLORS = { Outros: "#123A32" };
 
 let loader: Promise<void> | null = null;
