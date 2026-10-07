@@ -5,6 +5,8 @@ import { colorOfLabel } from "@/lib/categories";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string | undefined };
 
+/** True only for real coordinates (expired ones are null/NaN; (0,0) is never a valid place here). */
+export const hasCoords = (m: { lat: number | null; lng: number | null }) => Number.isFinite(m.lat) && Number.isFinite(m.lng) && !(m.lat === 0 && m.lng === 0);
 export const CATEGORY_COLORS = { Outros: "#123A32" };
 
 let loader: Promise<void> | null = null;
@@ -86,6 +88,8 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
     const g = (window as any).google;
     pins.current.forEach((m) => m.setMap(null));
     clusterer.current?.clearMarkers();
+    // Places whose coordinates expired (lat/lng null) are never drawn, so nothing lands at (0,0).
+    markers = markers.filter(hasCoords);
     pins.current = markers.map((m) => {
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({
@@ -139,7 +143,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
   useEffect(() => {
     if (!ready || !selectedId) return;
     const m = markers.find((x) => x.id === selectedId);
-    if (m) map.current.panTo({ lat: m.lat, lng: m.lng });
+    if (m && hasCoords(m)) map.current.panTo({ lat: m.lat, lng: m.lng });
   }, [ready, selectedId, markers]);
 
   // "relative" and "absolute" conflict (relative won, collapsing a full-screen map to 0px); only add it when not positioned.

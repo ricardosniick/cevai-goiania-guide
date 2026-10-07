@@ -74,3 +74,18 @@ describe("effectiveRadius", () => {
     expect(PARK_MAX_RADIUS_M).toBe(1500);
   });
 });
+
+describe("expired coordinates (Google 30-day cache rule)", () => {
+  it("formatKm hides distance when coordinates are missing", async () => {
+    const { formatKm, distanceKm } = await import("./geo-format");
+    expect(formatKm(distanceKm({ lat: -16.68, lng: -49.25 }, { lat: NaN, lng: NaN }))).toBe("");
+    expect(formatKm(0.5)).toBe("500 m");
+  });
+  it("hasCoords rejects null, NaN and (0,0)", async () => {
+    const { hasCoords } = await import("@/components/cevai/MapView");
+    expect(hasCoords({ lat: null, lng: null })).toBe(false);
+    expect(hasCoords({ lat: NaN, lng: NaN })).toBe(false);
+    expect(hasCoords({ lat: 0, lng: 0 })).toBe(false);
+    expect(hasCoords({ lat: -16.68, lng: -49.25 })).toBe(true);
+  });
+});

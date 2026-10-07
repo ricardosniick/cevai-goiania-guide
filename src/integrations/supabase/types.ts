@@ -360,6 +360,7 @@ export type Database = {
         Row: {
           address: string | null
           category: string | null
+          coords_fetched_at: string | null
           google_place_id: string
           lat: number | null
           lng: number | null
@@ -371,6 +372,7 @@ export type Database = {
         Insert: {
           address?: string | null
           category?: string | null
+          coords_fetched_at?: string | null
           google_place_id: string
           lat?: number | null
           lng?: number | null
@@ -382,6 +384,7 @@ export type Database = {
         Update: {
           address?: string | null
           category?: string | null
+          coords_fetched_at?: string | null
           google_place_id?: string
           lat?: number | null
           lng?: number | null

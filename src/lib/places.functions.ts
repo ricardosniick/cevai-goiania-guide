@@ -200,7 +200,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("places").upsert(
-        places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_name: p.photoName, updated_at: new Date().toISOString() })),
+        places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_name: p.photoName, updated_at: new Date().toISOString(), coords_fetched_at: new Date().toISOString() })),
         { onConflict: "google_place_id" },
       );
     }
@@ -220,7 +220,7 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       return url ? { url, attribution: p.authorAttributions?.[0]?.displayName ?? null } : null;
     }))).filter((p): p is { url: string; attribution: string | null } => p !== null);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_name: summary.photoName, updated_at: new Date().toISOString() }, { onConflict: "google_place_id" });
+    await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_name: summary.photoName, updated_at: new Date().toISOString(), coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     return {
       ...summary,
       address: place.formattedAddress ?? summary.address,
@@ -259,13 +259,14 @@ export const ensurePlace = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
   .handler(async ({ data, context }) => {
-    const { data: existing } = await context.supabase.from("places").select("google_place_id").eq("google_place_id", data.placeId).maybeSingle();
-    if (existing) return { ok: true };
+    const { data: existing } = await context.supabase.from("places").select("google_place_id, lat, lng").eq("google_place_id", data.placeId).maybeSingle();
+    // Existing rows with coordinates are kept; rows whose coordinates expired (Google 30-day cache rule) are refreshed below.
+    if (existing && existing.lat != null && existing.lng != null) return { ok: true };
     await rateLimit(context.userId, "ensure_place", 20, 60, RATE_MSG, true);
     const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
     if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "Lugar", address: g.formattedAddress ?? null, category: categoryOf(g), lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    const { error } = await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "Lugar", address: g.formattedAddress ?? null, category: categoryOf(g), lat: g.location.latitude, lng: g.location.longitude, coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     if (error) { console.error(error); throw new Error("Não foi possível registrar o lugar."); }
     return { ok: true };
   });
@@ -304,7 +305,7 @@ export const startPresence = createServerFn({ method: "POST" })
     await rateLimit(context.userId, "presence", 6, 3600);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude, coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     // Single atomic statement: replaces any previous presence, so a failure never leaves the user without one.
     const { error } = await supabaseAdmin.rpc("upsert_presence", { _user: context.userId, _place_id: g.id!, _mode: data.mode, _interests: interests });
     if (error) { console.error(error); throw new Error("Não foi possível marcar presença."); }
@@ -340,7 +341,7 @@ export const postSituation = createServerFn({ method: "POST" })
     const situations = [...new Set(data.situations.filter((s) => allowed.has(s)))];
     if (!situations.length) throw new Error("Escolha uma situação.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude }, { onConflict: "google_place_id", ignoreDuplicates: true });
+    await supabaseAdmin.from("places").upsert({ google_place_id: g.id, name: g.displayName?.text ?? "", address: g.formattedAddress ?? null, category, lat: g.location.latitude, lng: g.location.longitude, coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     // Both limits (10 min per place, 10/hour per person) and the insert run in one locked DB operation; only accepted posts count.
     const { data: result, error } = await supabaseAdmin.rpc("post_situation", { _user: context.userId, _place_id: g.id!, _kind: kind, _situations: situations });
     if (error) { console.error(error); throw new Error("Não foi possível publicar a situação."); }
