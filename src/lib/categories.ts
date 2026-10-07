@@ -118,16 +118,32 @@ export function isActivePlaceTypes(types: string[]): boolean {
   return !types.some((t) => HIDDEN_ONLY_TYPES.has(t));
 }
 const ACTIVE_LABELS = new Set(ACTIVE_GROUPS.flatMap((g) => activeSubs(g).map((s) => s.label)));
-/** Strict check for free-text search: the place's category (categoryFromTypes) must be active, or it carries an active Google type. "Outros" is dropped. */
-export function isActivePlace(types: string[], name = ""): boolean {
-  if (ACTIVE_LABELS.has(categoryFromTypes(types, name))) return true;
-  return types.some((t) => ACTIVE_TYPES.has(t));
+/** Google types that mark a place as belonging to a hidden category (supermarkets, wholesale, generic stores, health, auto…). */
+export const HIDDEN_TYPES = new Set([
+  ...GROUPS.flatMap((g) => g.subs.filter((s) => g.hidden || s.hidden).flatMap((s) => s.types ?? [])),
+  "wholesaler", "warehouse_store", "department_store", "hypermarket", "discount_store", "convenience_store", "food_store", "drugstore", "doctor", "medical_clinic",
+].filter((t) => !ACTIVE_TYPES.has(t)));
+/**
+ * Filtered searches keep a place only if it belongs to an active category.
+ * 1) primaryType decides first: hidden → drop; active → keep.
+ * 2) Only when primaryType is unknown, secondary types are used: any hidden type (except generic "store") drops it,
+ *    otherwise its categoryFromTypes label must be active. "Outros" is dropped.
+ * forcedLabel: label of a text-based filter the user picked (e.g. Shows), which counts as the place's category.
+ */
+export function isActivePlace(primaryType: string | undefined, types: string[], name = "", forcedLabel?: string): boolean {
+  if (primaryType && HIDDEN_TYPES.has(primaryType)) return false;
+  if (primaryType && ACTIVE_TYPES.has(primaryType)) return true;
+  if (types.some((t) => t !== "store" && HIDDEN_TYPES.has(t))) return false;
+  const label = forcedLabel ?? categoryFromTypes(types, name, primaryType);
+  return ACTIVE_LABELS.has(label);
 }
 /** Label a Google place by its types. */
-export function categoryFromTypes(types: string[], name = ""): string {
+export function categoryFromTypes(types: string[], name = "", primaryType?: string): string {
   if (/\bfeira\b/i.test(name)) return "Feiras";
   if (/beach\s*tennis/i.test(name)) return "Beach tennis";
   if (types.some((t) => t.includes("tennis"))) return "Quadras de tênis";
+  // Google's primaryType decides first; secondary types only when it matches no known category.
+  if (primaryType) { const hit = ALL_SUBS.find(({ s }) => s.types?.includes(primaryType)); if (hit) return hit.s.label; }
   for (const { s } of ALL_SUBS) if (s.types?.some((t) => types.includes(t))) return s.label;
   if (types.some((t) => t.includes("restaurant"))) return "Restaurantes";
   if (types.some((t) => t.includes("clinic") || t === "doctor")) return "Clínicas";
