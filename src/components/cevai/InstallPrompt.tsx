@@ -91,8 +91,8 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
         <div className="flex items-start gap-4">
           <img src="/icon-192.png" alt="" className="size-14 shrink-0 rounded-2xl shadow" />
           <div className="min-w-0 flex-1">
-            <h2 id="install-title" className="font-display text-xl font-black">{ios ? "📲 Adicione o Cê Vai? à sua tela inicial" : "📲 Tenha o Cê Vai? no seu celular"}</h2>
-            {!ios && <p className="mt-1 text-sm text-muted-foreground">Instale o Cê Vai? para acessar seus lugares, experiências e descobertas de forma rápida.</p>}
+            <h2 id="install-title" className="font-display text-xl font-black">{ios ? "📲 Adicione o Cê vai à sua tela inicial" : "📲 Tenha o Cê vai no seu celular"}</h2>
+            {!ios && <p className="mt-1 text-sm text-muted-foreground">Instale o Cê vai para acessar seus lugares, experiências e descobertas de forma rápida.</p>}
           </div>
         </div>
         {ios ? (
@@ -106,7 +106,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
             Toque nos <b>⋮</b> do Chrome e escolha <b>‘Instalar app’</b> ou <b>‘Adicionar à tela inicial’</b>.
           </div>
         ) : (
-          <Button onClick={() => void install()} className="mt-5 h-12 w-full rounded-full text-base font-extrabold">Instalar Cê Vai?</Button>
+          <Button onClick={() => void install()} className="mt-5 h-12 w-full rounded-full text-base font-extrabold">Instalar Cê vai</Button>
         )}
         <Button variant="ghost" onClick={close} className="mt-2 h-11 w-full rounded-full font-bold">Continuar no navegador</Button>
       </div>
