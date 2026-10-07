@@ -117,6 +117,12 @@ export function isActivePlaceTypes(types: string[]): boolean {
   if (types.some((t) => ACTIVE_TYPES.has(t))) return true;
   return !types.some((t) => HIDDEN_ONLY_TYPES.has(t));
 }
+const ACTIVE_LABELS = new Set(ACTIVE_GROUPS.flatMap((g) => activeSubs(g).map((s) => s.label)));
+/** Strict check for free-text search: the place's category (categoryFromTypes) must be active, or it carries an active Google type. "Outros" is dropped. */
+export function isActivePlace(types: string[], name = ""): boolean {
+  if (ACTIVE_LABELS.has(categoryFromTypes(types, name))) return true;
+  return types.some((t) => ACTIVE_TYPES.has(t));
+}
 /** Label a Google place by its types. */
 export function categoryFromTypes(types: string[], name = ""): string {
   if (/\bfeira\b/i.test(name)) return "Feiras";

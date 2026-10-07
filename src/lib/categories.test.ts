@@ -150,3 +150,14 @@ describe("leisure focus (hidden categories)", () => {
     expect(c.isActivePlaceTypes(["night_club"])).toBe(true);
   });
 });
+
+describe("text search keeps only active categories", () => {
+  it("drops a pharmacy, keeps a restaurant, bookstore and fair", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace(["pharmacy", "health", "store"], "Farmácia Pacheco")).toBe(false);
+    expect(c.isActivePlace(["drugstore", "store"], "Drogaria Pacheco")).toBe(false);
+    expect(c.isActivePlace(["restaurant", "food"], "Pacheco Grill")).toBe(true);
+    expect(c.isActivePlace(["book_store", "store"], "Livraria")).toBe(true);
+    expect(c.isActivePlace(["point_of_interest"], "Feira da Lua")).toBe(true);
+  });
+});
