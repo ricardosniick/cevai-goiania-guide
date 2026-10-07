@@ -267,6 +267,8 @@ export const ensurePlace = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const PRESENCE_DISABLED = true;
+
 /** Starts presence only after confirming, with the place's real Google data, that the category allows it and the device is inside the presence area. */
 export const startPresence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -279,6 +281,8 @@ export const startPresence = createServerFn({ method: "POST" })
     interests: z.array(z.string().max(40)).max(8),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    // Social features ("Estou aqui") are disabled in this version; the code below is kept so they can return later.
+    if (PRESENCE_DISABLED) throw new Error("O recurso “Estou aqui” não está disponível nesta versão.");
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
     await rateLimit(context.userId, "presence_try", 30, 3600, RATE_MSG, true);

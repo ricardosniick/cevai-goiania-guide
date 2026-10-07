@@ -98,7 +98,6 @@ export function SituationPanel({ user, place, notify }: { user: User; place: Pla
           </div>
         </>
       ) : sit.isLoading ? <p className="mt-2 text-sm text-muted-foreground">Carregando…</p> : <p className="mt-2 text-sm text-muted-foreground">Sem informações recentes sobre a situação deste local.</p>}
-      {!!cur?.people_here && <p className="mt-2 text-sm font-bold">👥 {cur.people_here} {cur.people_here === 1 ? "pessoa está" : "pessoas estão"} aqui agora</p>}
 
       {onSite && !open && (
         <div className="mt-3 border-t border-border pt-3">

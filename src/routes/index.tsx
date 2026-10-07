@@ -26,10 +26,9 @@ import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { getPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
-import { PresencePanel } from "@/components/cevai/PresencePanel";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor, PENDING_LINK_KEY } from "@/components/cevai/InstallPrompt";
-import { HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA, allowsPresence } from "@/lib/categories";
+import { HOME_CHIPS, MAP_CHIPS, filterLabel, filterEmoji, emojiOfLabel, colorOfLabel, criteriaFor, isFair, STALL_CRITERIA } from "@/lib/categories";
 
 const emojiOf = emojiOfLabel;
 
@@ -454,7 +453,6 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, notify }: { p
             <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-3"><p className="text-[10px] font-extrabold uppercase tracking-wider text-secondary">Experiências no Cê Vai?</p>{(() => { const st = stats.data?.[p.id]; return st?.count ? <><p className="mt-1 flex items-center gap-1 font-display text-lg font-black text-primary"><Heart size={15} className="fill-secondary text-secondary" />{fmt1(st.avg)}</p><p className="text-[10px] font-bold text-muted-foreground">{st.count} {st.count === 1 ? "experiência" : "experiências"}</p></> : <p className="mt-1 text-[11px] font-semibold text-muted-foreground">Ainda não há experiências registradas no Cê Vai?.</p>; })()}</div>
           </div>
           {user && <SituationPanel user={user} place={p} notify={notify} />}
-          {user && allowsPresence(p.category) && <PresencePanel user={user} place={p} notify={notify} />}
         </div>
         <div className="sticky top-0 z-10 mt-4 flex border-b border-border bg-background px-5">
           {(isFair(p.category, p.name) ? ["Sobre", "Barraquinhas", "Experiências", "Fotos"] as const : ["Sobre", "Experiências", "Fotos"] as const).map((t) => <button key={t} onClick={() => setTab(t)} className={`flex-1 border-b-2 py-3 text-[13px] font-extrabold ${tab === t ? "border-secondary text-primary" : "border-transparent text-muted-foreground"}`}>{t}</button>)}

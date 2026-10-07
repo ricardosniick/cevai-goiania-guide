@@ -43,3 +43,8 @@
 - Continua no index.tsx: shell CeVaiApp + BottomNav, auth (Welcome/Login/Signup/Forgot/NewPassword), Explorar (HomeScreen, usePlaceStats, GoogleRating, PlaceRow), Mapa, Página do lugar (DetailScreen), ExperienceCard/Menu, Salvos, Perfil, ExperienceModal.
 - [ ] Pausado (só retomar se o usuário pedir): 7B-5 auth · 7B-6 Explorar/Mapa · 7B-7 cards · 7B-8a/b/c · 7B-9 modal · 7B-10 shell · distanceKm via geo.ts · 7C Prettier
 - [ ] Separado: aviso do markerclusterer no servidor de desenvolvimento (só preview).
+
+## Parte social — DESATIVADA nesta versão
+- [x] Interface removida: "Estou aqui", pessoas no local, conexões, chat, bloqueio/denúncia de pessoas; linha "pessoas aqui agora" da Situação.
+- [x] startPresence desligada (PRESENCE_DISABLED); migração 0009_disable_social_features revoga as funções e escritas sociais. Tabelas e dados mantidos.
+- [ ] Para voltar: novo GRANT nas funções/tabelas, PRESENCE_DISABLED = false e recolocar o PresencePanel na página do lugar.
