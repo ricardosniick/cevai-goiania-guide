@@ -1,7 +1,7 @@
 import { useState, type InputHTMLAttributes } from "react";
 import { ArrowLeft, ChevronRight, Heart, Image as ImageIcon, Lock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { GROUPS, filterLabel, filterEmoji } from "@/lib/categories";
+import { ACTIVE_GROUPS, activeSubs, filterLabel, filterEmoji } from "@/lib/categories";
 import type { PlaceStat } from "@/components/cevai/types";
 
 export function LoginPrompt({ onLogin, text = "Entre na sua conta para buscar lugares reais, ver fotos e registrar experiências." }: { onLogin: () => void; text?: string }) {
@@ -27,9 +27,9 @@ export function CategoriesScreen({ value, onBack, onPick }: { value: string | nu
   return <section className="h-full overflow-y-auto pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
     <div className="flex items-center gap-2 px-3"><Button variant="ghost" size="icon" aria-label="Voltar" onClick={onBack} className="rounded-full"><ArrowLeft /></Button><h1 className="font-display text-2xl font-black">Todas as categorias</h1></div>
     <div className="mt-2 space-y-6 px-5">
-      {GROUPS.filter((g) => g.key !== "cafes-g").map((g) => <div key={g.key}>
+      {ACTIVE_GROUPS.filter((g) => g.key !== "cafes-g").map((g) => <div key={g.key}>
         <button onClick={() => onPick(g.key)} className="flex w-full items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: g.color }}>{g.emoji} {g.label}</h2><span className="text-[11px] font-bold text-muted-foreground">Ver tudo</span></button>
-        <div className="mt-2 grid grid-cols-2 gap-2">{g.subs.map((sub) => <button key={sub.key} onClick={() => onPick(sub.key)} className={`flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm font-bold shadow-sm ${value === sub.key ? "bg-primary text-primary-foreground" : "bg-card"}`}><span className="text-lg">{sub.emoji}</span><span className="min-w-0 truncate">{sub.label}</span></button>)}</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">{activeSubs(g).map((sub) => <button key={sub.key} onClick={() => onPick(sub.key)} className={`flex items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm font-bold shadow-sm ${value === sub.key ? "bg-primary text-primary-foreground" : "bg-card"}`}><span className="text-lg">{sub.emoji}</span><span className="min-w-0 truncate">{sub.label}</span></button>)}</div>
       </div>)}
       <p className="rounded-2xl bg-muted p-4 text-xs text-muted-foreground">📚 Livros ficam no seu Perfil — eles não são lugares do mapa.</p>
     </div>

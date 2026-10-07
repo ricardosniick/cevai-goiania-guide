@@ -171,7 +171,7 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 /* ---------------- Onboarding & auth ---------------- */
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
-  return <section className="relative h-full min-h-dvh overflow-hidden bg-primary">
+  return <section className="relative h-full overflow-hidden bg-primary">
     <img src={welcomeArt.url} className="absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]" alt="Cê Vai? — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
     <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-primary via-primary/80 to-transparent" />
     <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
