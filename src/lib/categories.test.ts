@@ -100,7 +100,7 @@ describe("resolveFilter", () => {
     for (const g of GROUPS) {
       const r = resolveFilter(g.key);
       if (g.text) expect(r.text).toBe(g.text);
-      else if (g.subs.length) expect(new Set(r.types)).toEqual(new Set(g.subs.flatMap((s) => s.types ?? [])));
+      else if (g.subs.length) expect(new Set(r.types)).toEqual(new Set(g.subs.filter((s) => !s.hidden).flatMap((s) => s.types ?? [])));
       else expect(r).toEqual({ types: [] });
     }
   });
