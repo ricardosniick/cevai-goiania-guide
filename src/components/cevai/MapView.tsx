@@ -143,7 +143,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
   useEffect(() => {
     if (!ready || !selectedId) return;
     const m = markers.find((x) => x.id === selectedId);
-    if (m) map.current.panTo({ lat: m.lat, lng: m.lng });
+    if (m && hasCoords(m)) map.current.panTo({ lat: m.lat, lng: m.lng });
   }, [ready, selectedId, markers]);
 
   // "relative" and "absolute" conflict (relative won, collapsing a full-screen map to 0px); only add it when not positioned.
