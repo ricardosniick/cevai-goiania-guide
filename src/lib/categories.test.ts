@@ -151,13 +151,37 @@ describe("leisure focus (hidden categories)", () => {
   });
 });
 
-describe("text search keeps only active categories", () => {
-  it("drops a pharmacy, keeps a restaurant, bookstore and fair", async () => {
+describe("filtered searches keep only active categories", () => {
+  it("drops a supermarket with secondary bakery", async () => {
     const c = await import("./categories");
-    expect(c.isActivePlace(["pharmacy", "health", "store"], "Farmácia Pacheco")).toBe(false);
-    expect(c.isActivePlace(["drugstore", "store"], "Drogaria Pacheco")).toBe(false);
-    expect(c.isActivePlace(["restaurant", "food"], "Pacheco Grill")).toBe(true);
-    expect(c.isActivePlace(["book_store", "store"], "Livraria")).toBe(true);
-    expect(c.isActivePlace(["point_of_interest"], "Feira da Lua")).toBe(true);
+    expect(c.isActivePlace("supermarket", ["supermarket", "bakery", "grocery_store", "store"], "Supermercado Bretas")).toBe(false);
+  });
+  it("drops a supermarket with secondary liquor_store", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace("supermarket", ["supermarket", "liquor_store", "store"], "Tático")).toBe(false);
+  });
+  it("drops a wholesaler with no known category", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace(undefined, ["wholesaler", "store", "point_of_interest"], "Atacadão")).toBe(false);
+    expect(c.isActivePlace("warehouse_store", ["warehouse_store", "bakery"], "Atacadão")).toBe(false);
+  });
+  it("drops places that fall into Outros", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace(undefined, ["point_of_interest", "establishment"], "Algum lugar")).toBe(false);
+  });
+  it("keeps a normal restaurant and a real bakery", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace("restaurant", ["restaurant", "food"], "Pacheco Grill")).toBe(true);
+    expect(c.isActivePlace("bakery", ["bakery", "store"], "Padaria Central")).toBe(true);
+  });
+  it("drops pharmacies and keeps fairs and picked text filters", async () => {
+    const c = await import("./categories");
+    expect(c.isActivePlace("pharmacy", ["pharmacy", "store"], "Farmácia Pacheco")).toBe(false);
+    expect(c.isActivePlace(undefined, ["point_of_interest"], "Feira da Lua")).toBe(true);
+    expect(c.isActivePlace("night_club", ["night_club"], "Casa X", "Shows")).toBe(true);
+  });
+  it("classifies by primaryType first", async () => {
+    const c = await import("./categories");
+    expect(c.categoryFromTypes(["supermarket", "bakery"], "", "supermarket")).toBe("Supermercados");
   });
 });

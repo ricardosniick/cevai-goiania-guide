@@ -4,7 +4,7 @@ import { splitByCache, withinBudget, PHOTO_NEW_PER_MINUTE } from "./photo-budget
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES, isActivePlace } from "./categories";
-/** Free-text search keeps only places of active categories; set false to revert. */
+/** Searches keep only places of active categories; set false to revert. */
 export const RESTRICT_TEXT_TO_ACTIVE = true;
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
@@ -123,7 +123,7 @@ async function photoUrl(photo: GPhoto | undefined, width = 800): Promise<string 
 }
 
 function categoryOf(place: GPlace): string {
-  return categoryFromTypes([place.primaryType, ...(place.types ?? [])].filter(Boolean) as string[], place.displayName?.text ?? "");
+  return categoryFromTypes([place.primaryType, ...(place.types ?? [])].filter(Boolean) as string[], place.displayName?.text ?? "", place.primaryType);
 }
 
 async function toSummary(place: GPlace, width = 600, forcedCategory?: string): Promise<PlaceSummary> {
@@ -194,7 +194,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
       });
     }
     const forced = !data.query && filter.label ? filter.label : undefined;
-    const raw = data.query && RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace([p.primaryType, ...(p.types ?? [])].filter(Boolean) as string[], p.displayName?.text ?? "")) : (result.places ?? []);
+    // Filtered searches (Destaques, categories, text) keep only places of active categories; dropped places get no photo calls and are not stored.
+    const raw = RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace(p.primaryType, p.types ?? [], p.displayName?.text ?? "", forced)) : (result.places ?? []);
     const places = await Promise.all(raw.slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
