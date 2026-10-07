@@ -71,6 +71,13 @@
       "when": 1791333876866,
       "tag": "0009_disable_social_features",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791335215694,
+      "tag": "0010_places_coords_fetched_at",
+      "breakpoints": true
     }
   ]
 }
