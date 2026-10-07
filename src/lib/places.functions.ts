@@ -194,7 +194,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
       });
     }
     const forced = !data.query && filter.label ? filter.label : undefined;
-    const places = await Promise.all((result.places ?? []).slice(0, 20).map((p) => toSummary(p, 600, forced)));
+    const raw = data.query && RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlaceTypes(p.types ?? [])) : (result.places ?? []);
+    const places = await Promise.all(raw.slice(0, 20).map((p) => toSummary(p, 600, forced)));
     if (places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
