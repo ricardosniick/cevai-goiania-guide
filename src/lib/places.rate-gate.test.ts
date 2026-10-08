@@ -75,8 +75,8 @@ describe.each(handlers)("$name: limite antes do Google", ({ fn, input, bucket })
     setup();
     await expect(fn(input, context)).rejects.toThrow(message);
     expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc.mock.calls[0][0]).toBe("hit_rate_limit");
-    expect((rpc.mock.calls[0][1] as { _bucket: string })._bucket).toBe(bucket);
+    expect(rpc.mock.calls[0]?.[0]).toBe("hit_rate_limit");
+    expect((rpc.mock.calls[0]?.[1] as { _bucket: string })._bucket).toBe(bucket);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(upsert).not.toHaveBeenCalled();
   });
@@ -85,6 +85,6 @@ describe.each(handlers)("$name: limite antes do Google", ({ fn, input, bucket })
     rpc.mockResolvedValue({ data: true, error: null });
     await fn(input, context).catch(() => {}); // later steps may reject the fake reply; only the gate matters here
     expect(fetchMock).toHaveBeenCalled();
-    expect(String(fetchMock.mock.calls[0][0])).toContain("/places/v1/places");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/places/v1/places");
   });
 });
