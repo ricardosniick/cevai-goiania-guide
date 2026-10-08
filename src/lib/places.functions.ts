@@ -64,7 +64,7 @@ async function checkRate(userId: string, bucket: string, max: number, windowSeco
     if (d === "unavailable") console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error ?? data);
     return d;
   } catch (e) {
-    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e);
+    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e); console.log("DBGT", String(e));
     return "unavailable";
   }
 }
