@@ -57,6 +57,7 @@ type GPlace = {
 
 /** Atomic per-user limit (SQL advisory lock). Always fail-closed: only an explicit grant lets the call continue. */
 async function checkRate(userId: string, bucket: string, max: number, windowSeconds: number): Promise<RateDecision> {
+  console.log("DBGC", bucket);
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
