@@ -23,6 +23,7 @@ import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { saveExperiencePhoto } from "@/lib/experience-photo";
+import { deleteExperience } from "@/lib/delete-experience";
 import { MAX_EXPERIENCE_PHOTOS, selectExperiencePhotos } from "@/lib/experience-photo-selection";
 import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
@@ -526,11 +527,9 @@ function ExperienceMenu({ exp }: { exp: Experience }) {
   const remove = async () => {
     setBusy(true);
     try {
-      // Photos and criteria rows are removed by the database together with the experience; the place stays.
-      const { error } = await supabase.from("experiences").delete().eq("id", exp.id).eq("user_id", ctx.user.id);
-      if (error) return ctx.notify(friendlyError(error, "Não foi possível excluir.", "delete experience"));
-      if (exp.photoItems.length) { const rm = await supabase.storage.from("experience-photos").remove(exp.photoItems.map((p) => p.path)); if (rm.error) console.error("[erro] remove photo files", exp.photoItems.map((p) => p.path), rm.error); }
-      refresh(); ctx.notify("Experiência excluída.");
+      // Confirm the deleted row before considering cleanup of its linked files.
+      const result = await deleteExperience(ctx.user.id, exp.id);
+      refresh(); ctx.notify(result.photoCleanupFailed ? "Experiência excluída. A limpeza de algumas fotos ficou pendente." : "Experiência excluída.");
     } catch (e) { ctx.notify(friendlyError(e, "Não foi possível excluir.", "delete experience")); } finally { setBusy(false); setConfirm(false); }
   };
   return <>
