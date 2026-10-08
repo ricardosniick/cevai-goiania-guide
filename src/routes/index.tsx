@@ -22,6 +22,7 @@ import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { distanceKm, formatKm } from "@/lib/geo-format";
+import { saveExperiencePhoto } from "@/lib/experience-photo";
 import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
@@ -648,13 +649,8 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
           if (del.error) { console.error("[erro] experience_photos delete", del.error); photoFailed = true; }
           else { const rm = await supabase.storage.from("experience-photos").remove(removed); if (rm.error) console.error(rm.error); }
         }
-        for (const [i, f] of files.entries()) {
-          const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-          const path = `${user.id}/${editing.id}/${Date.now()}-${i}.${ext}`;
-          const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-          if (up.error) { console.error("[erro] photo upload", up.error); photoFailed = true; continue; }
-          const ins = await supabase.from("experience_photos").insert({ experience_id: editing.id, user_id: user.id, storage_path: path });
-          if (ins.error) { console.error("[erro] experience_photos", ins.error); photoFailed = true; }
+        for (const f of files) {
+          if (!(await saveExperiencePhoto(user.id, editing.id, f))) photoFailed = true;
         }
         if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
         onSaved();
@@ -668,13 +664,8 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
       let photoFailed = false;
       if (scoreRows.length) { const sc = await supabase.from("experience_scores").insert(scoreRows); if (sc.error) { console.error("[erro] experience_scores", sc.error); setTimeout(() => notify("As notas por critério não puderam ser salvas. Edite a experiência para tentar de novo."), 2500); } }
-      for (const [i, f] of files.entries()) {
-        const ext = (f.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const path = `${user.id}/${exp.id}/${Date.now()}-${i}.${ext}`;
-        const up = await supabase.storage.from("experience-photos").upload(path, f, { contentType: f.type });
-        if (up.error) { console.error("[erro] photo upload", up.error); photoFailed = true; continue; }
-        const ins = await supabase.from("experience_photos").insert({ experience_id: exp.id, user_id: user.id, storage_path: path });
-        if (ins.error) { console.error("[erro] experience_photos", ins.error); photoFailed = true; }
+      for (const f of files) {
+        if (!(await saveExperiencePhoto(user.id, exp.id, f))) photoFailed = true;
       }
       if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
       const sv = await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
