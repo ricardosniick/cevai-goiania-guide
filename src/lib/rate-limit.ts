@@ -58,8 +58,8 @@ export async function resolvePhotoBatch(
   }
   if (personal <= 0) return out;
   const raw = await deps.reserveGlobal(personal).catch(() => 0);
-  // Fail-closed: only an exact grant of what was requested authorizes calls; an over-grant is invalid.
-  const granted = Number.isInteger(raw) && raw === personal ? personal : 0;
+  // Fail-closed: a grant within the requested amount authorizes that many; an over-grant is invalid.
+  const granted = Number.isInteger(raw) && raw > 0 && raw <= personal ? raw : 0;
   const allowed = withinBudget(missing, granted);
   await Promise.all(allowed.map(async (n) => { const u = await deps.fetchUrl(n).catch(() => null); if (u) out[n] = u; }));
   return out;
