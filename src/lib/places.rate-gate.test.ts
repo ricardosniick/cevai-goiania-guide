@@ -28,6 +28,8 @@ vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args), from: () => ({ upsert }) },
 }));
 
+// Warm the mocked module so concurrent dynamic imports in the handlers all resolve to the mock.
+await import("@/integrations/supabase/client.server");
 import { searchPlaces, getPlaceDetails, ensurePlace, postSituation } from "./places.functions";
 import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG } from "./rate-limit";
 import { resolvePlacePhotos } from "./places.functions";
