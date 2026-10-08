@@ -139,13 +139,16 @@ async function gateway<T>(path: string, init: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function photoUrl(photo: GPhoto | undefined, width = 800): Promise<string | null> {
-  if (!photo?.name || !PHOTO_NAME_RE.test(photo.name)) return null;
-  const key = `${photo.name}:${width}`;
-  const cached = cacheGet(key);
-  if (cached) return cached;
+const photoKey = (name: string, width: number) => `${name}:${width}`;
+
+/** Single Google photo request. Only called after a global "photo" reservation was granted for it. */
+async function fetchPhotoUrl(key: string): Promise<string | null> {
+  const i = key.lastIndexOf(":");
+  const name = key.slice(0, i);
+  const width = Number(key.slice(i + 1));
+  if (!PHOTO_NAME_RE.test(name) || !Number.isInteger(width)) return null;
   try {
-    const data = await gateway<{ photoUri?: string }>(`/places/v1/${photo.name}/media?maxWidthPx=${width}&skipHttpRedirect=true`, { headers: headers() });
+    const data = await gateway<{ photoUri?: string }>(`/places/v1/${name}/media?maxWidthPx=${width}&skipHttpRedirect=true`, { headers: headers() });
     if (data.photoUri) cacheSet(key, data.photoUri);
     return data.photoUri ?? null;
   } catch {
@@ -153,12 +156,27 @@ async function photoUrl(photo: GPhoto | undefined, width = 800): Promise<string 
   }
 }
 
+/** Every photo path: cache first (free), then one partial "photo" reservation; at most `granted` Google requests. */
+function resolvePhotoKeys(keys: string[], checkLimit?: () => Promise<RateDecision>): Promise<Record<string, string>> {
+  return resolvePhotoBatch(keys, {
+    cacheGet,
+    checkLimit,
+    reserveGlobal: (n) => reserveGlobal("photo", n, true),
+    fetchUrl: fetchPhotoUrl,
+  });
+}
+
+function validPhotoName(photo: GPhoto | undefined): string | null {
+  return photo?.name && PHOTO_NAME_RE.test(photo.name) ? photo.name : null;
+}
+
 function categoryOf(place: GPlace): string {
   return categoryFromTypes([place.primaryType, ...(place.types ?? [])].filter(Boolean) as string[], place.displayName?.text ?? "", place.primaryType);
 }
 
-async function toSummary(place: GPlace, width = 600, forcedCategory?: string): Promise<PlaceSummary> {
+function toSummary(place: GPlace, urls: Record<string, string>, width = 600, forcedCategory?: string): PlaceSummary {
   const first = place.photos?.[0];
+  const name = validPhotoName(first);
   return {
     id: place.id,
     name: place.displayName?.text ?? "Lugar",
@@ -169,8 +187,8 @@ async function toSummary(place: GPlace, width = 600, forcedCategory?: string): P
     lng: place.location?.longitude ?? GOIANIA.lng,
     rating: place.rating ?? null,
     ratingCount: place.userRatingCount ?? null,
-    photoUrl: await photoUrl(first, width),
-    photoName: first?.name && PHOTO_NAME_RE.test(first.name) ? first.name : null,
+    photoUrl: name ? urls[photoKey(name, width)] ?? null : null,
+    photoName: name,
     photoAttribution: first?.authorAttributions?.[0]?.displayName ?? null,
   };
 }
