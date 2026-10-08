@@ -163,7 +163,7 @@ describe("fotos e teto global", () => {
     globalRpc.mockResolvedValue({ data: 1, error: null });
     const names = [photo(201).name, photo(202).name, photo(203).name];
     const out = (await (resolvePlacePhotos as unknown as Call)({ names } as never, context as never)) as Record<string, string>;
-    console.log('DBG', JSON.stringify(rpc.mock.calls));
+    console.log('DBG', JSON.stringify(names), JSON.stringify(out));
     expect(userRpc).toHaveBeenCalledTimes(3);
     expect(globalRpc).toHaveBeenCalledWith({ _bucket: "photo", _requested: 3, _allow_partial: true });
     expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(1);
