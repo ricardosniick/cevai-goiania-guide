@@ -49,7 +49,7 @@ export async function resolvePhotoBatch(
   const out: Record<string, string> = {};
   const { cached, missing } = splitByCache(names, (n) => !!deps.cacheGet(n));
   cached.forEach((n) => { const c = deps.cacheGet(n); if (c) out[n] = c; });
-  if (!missing.length) return out;
+  if (!missing.length) return out; console.log("DBGM", missing, cached);
   let personal = missing.length;
   if (deps.checkLimit) {
     const check = deps.checkLimit;
