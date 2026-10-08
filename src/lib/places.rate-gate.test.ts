@@ -25,7 +25,7 @@ const rpc = vi.fn((name: string, args: Record<string, unknown>) =>
   name === "hit_rate_limit" ? userRpc(args) : name === "reserve_global_budget" ? globalRpc(args) : Promise.resolve({ data: null, error: null }));
 const upsert = vi.fn(async () => ({ error: null }));
 vi.mock("@/integrations/supabase/client.server", () => ({
-  supabaseAdmin: { rpc: (...a: unknown[]) => rpc(...a), from: () => ({ upsert }) },
+  supabaseAdmin: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args), from: () => ({ upsert }) },
 }));
 
 import { searchPlaces, getPlaceDetails, ensurePlace, postSituation } from "./places.functions";
@@ -125,7 +125,7 @@ describe.each(handlers)("$name: teto global antes do Google", ({ fn, input, glob
 });
 
 it("busca por proximidade reserva nearby_search", async () => {
-  await searchPlaces({ category: "Comer", lat: -16.68, lng: -49.25 } as never, context as never).catch(() => {});
+  await (searchPlaces as unknown as Call)({ category: "Comer", lat: -16.68, lng: -49.25 } as never, context as never).catch(() => {});
   expect(globalRpc.mock.calls[0]?.[0]).toMatchObject({ _bucket: "nearby_search", _requested: 1 });
   expect(String(fetchMock.mock.calls[0]?.[0])).toContain("searchNearby");
 });
@@ -143,7 +143,7 @@ describe("fotos e teto global", () => {
     const places = [1, 2, 3, 4].map((i) => ({ id: `ChIJsearchPlace${i}xxxx`, displayName: { text: `Restaurante ${i}` }, primaryType: "restaurant", types: ["restaurant"], location: { latitude: -16.6, longitude: -49.2 }, photos: [photo(100 + i)] }));
     gatewayReply({ places });
     globalRpc.mockImplementation(async (a: { _bucket: string; _requested: number }) => ({ data: a._bucket === "photo" ? 2 : 1, error: null }));
-    const out = (await searchPlaces({ query: "restaurante", lat: -16.68, lng: -49.25 } as never, context as never)) as Array<{ photoUrl: string | null }>;
+    const out = (await (searchPlaces as unknown as Call)({ query: "restaurante", lat: -16.68, lng: -49.25 } as never, context as never)) as Array<{ photoUrl: string | null }>;
     expect(globalRpc.mock.calls.map((c) => c[0])).toContainEqual({ _bucket: "photo", _requested: 4, _allow_partial: true });
     expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(2);
     expect(out.filter((p) => p.photoUrl).length).toBe(2);
@@ -152,7 +152,7 @@ describe("fotos e teto global", () => {
   it("detalhes: foto bloqueada pelo teto não chama Google e o lugar abre sem fotos", async () => {
     gatewayReply({ id: PLACE_ID, displayName: { text: "Parque" }, photos: [photo(1), photo(2), photo(3)] });
     globalRpc.mockImplementation(async (a: { _bucket: string }) => ({ data: a._bucket === "photo" ? -1 : 1, error: null }));
-    const out = (await getPlaceDetails({ placeId: PLACE_ID } as never, context as never)) as { photos: unknown[]; photoUrl: string | null };
+    const out = (await (getPlaceDetails as unknown as Call)({ placeId: PLACE_ID } as never, context as never)) as { photos: unknown[]; photoUrl: string | null };
     expect(globalRpc.mock.calls.map((c) => c[0])).toContainEqual({ _bucket: "photo", _requested: 4, _allow_partial: true });
     expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(0);
     expect(out.photos).toEqual([]);
@@ -162,7 +162,8 @@ describe("fotos e teto global", () => {
     gatewayReply({});
     globalRpc.mockResolvedValue({ data: 1, error: null });
     const names = [photo(201).name, photo(202).name, photo(203).name];
-    const out = (await resolvePlacePhotos({ names } as never, context as never)) as Record<string, string>;
+    const out = (await (resolvePlacePhotos as unknown as Call)({ names } as never, context as never)) as Record<string, string>;
+    console.log('DBG', rpc.mock.calls.map(c=>c[0]));
     expect(userRpc).toHaveBeenCalledTimes(3);
     expect(globalRpc).toHaveBeenCalledWith({ _bucket: "photo", _requested: 3, _allow_partial: true });
     expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(1);
@@ -171,16 +172,16 @@ describe("fotos e teto global", () => {
   it("fotos em cache não reservam nem chamam o Google", async () => {
     gatewayReply({});
     const names = [photo(301).name];
-    await resolvePlacePhotos({ names } as never, context as never); // fills cache
+    await (resolvePlacePhotos as unknown as Call)({ names } as never, context as never); // fills cache
     rpc.mockClear(); globalRpc.mockClear(); userRpc.mockClear(); fetchMock.mockClear();
-    const out = (await resolvePlacePhotos({ names } as never, context as never)) as Record<string, string>;
+    const out = (await (resolvePlacePhotos as unknown as Call)({ names } as never, context as never)) as Record<string, string>;
     expect(Object.keys(out)).toEqual(names);
     expect(globalRpc).not.toHaveBeenCalled();
     expect(userRpc).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it("o servidor só envia bucket, quantidade e parcial; nunca valores de limite", async () => {
-    await getPlaceDetails({ placeId: PLACE_ID, per_day: 999 } as never, context as never).catch(() => {});
+    await (getPlaceDetails as unknown as Call)({ placeId: PLACE_ID, per_day: 999 } as never, context as never).catch(() => {});
     for (const c of globalRpc.mock.calls) expect(Object.keys(c[0] as object).sort()).toEqual(["_allow_partial", "_bucket", "_requested"]);
     expect(rpc.mock.calls.some((c) => c[0] === "set_global_api_limit")).toBe(false);
   });
