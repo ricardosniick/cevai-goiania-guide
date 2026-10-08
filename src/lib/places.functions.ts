@@ -54,17 +54,23 @@ type GPlace = {
   regularOpeningHours?: { weekdayDescriptions?: string[] };
 };
 
-const RATE_MSG = "Muitas tentativas. Tente de novo em alguns instantes.";
-/** Atomic per-user limit (SQL advisory lock). Throws a friendly message when exceeded. */
-async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG, failClosed = false) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
-  if (error) {
-    console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error);
-    if (failClosed) throw new Error(message);
-    return;
+/** Atomic per-user limit (SQL advisory lock). Always fail-closed: only an explicit grant lets the call continue. */
+async function checkRate(userId: string, bucket: string, max: number, windowSeconds: number): Promise<RateDecision> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
+    const d = rateDecision(data, error);
+    if (d === "unavailable") console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error ?? data);
+    return d;
+  } catch (e) {
+    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e);
+    return "unavailable";
   }
-  if (data === false) throw new Error(message);
+}
+async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
+  const d = await checkRate(userId, bucket, max, windowSeconds);
+  if (d === "limited") throw new Error(message);
+  if (d === "unavailable") throw new Error(RATE_UNAVAILABLE_MSG);
 }
 
 /** Bounded photo URL cache: max 500 entries, 30-min validity, oldest evicted first. */
