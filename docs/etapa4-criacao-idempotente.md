@@ -16,7 +16,11 @@ src/routes/index.tsx; src/integrations/supabase/types.ts; docs/sql/etapa4_create
 
 239 testes do app, TypeScript, build e diff --check passaram. Mais 19 cenários SQL passaram no PGlite isolado, com tabelas mínimas e RLS modelada. Cobrem repetição, conflito de dados, outro dono, falha inicial e nova tentativa, ID nulo, visitas distintas, função antiga, atomicidade, privacidade, permissões e reversão. Chamadas são sequenciais; isso não é um teste de concorrência entre conexões no Supabase real. A unicidade do ID vem da primary key existente. Não houve acesso ao banco real ou chamadas pagas.
 
-## Ordem — não aplicado em produção
+## Aplicação e ordem de integração
+
+Status: aplicação e conferência no banco relatadas pelo Lovable como migração 0017. O repositório contém drizzle/migrations/0017_create_experience_once.sql com a mesma lógica do SQL revisado. O PR foi atualizado com a main mantendo os tipos auto-gerados e o cast localizado que preserva stall_id nulo; 239 testes, TypeScript e build passaram na versão combinada. Não reaplicar o SQL sem revisar o estado.
+
+Ordem usada:
 
 1. Conferir por leitura no Supabase: nova assinatura ausente, experiences.id UUID e PRIMARY KEY, INSERT/SELECT de authenticated e leitura de experience_scores sob RLS existente. Se houver divergência, parar e revisar.
 2. Com autorização explícita, aplicar só docs/sql/etapa4_create_experience_once_NAO_APLICADO.sql numa transação e registrar a migração no fluxo existente. Conferir assinatura (uuid,text,text,integer,text,boolean,uuid,jsonb), SECURITY INVOKER, search_path vazio, anon/PUBLIC sem EXECUTE e função antiga intacta.

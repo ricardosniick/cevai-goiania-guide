@@ -599,18 +599,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      create_experience: {
-        Args: {
-          _place_id: string
-          _category: string
-          _rating: number
-          _comment: string
-          _would_return: boolean
-          _stall_id: string | null
-          _scores: Json
-        }
-        Returns: string
-      }
       chat_messages_for: {
         Args: { _request_id: string }
         Returns: {
@@ -621,6 +609,18 @@ export type Database = {
         }[]
       }
       cleanup_presence: { Args: never; Returns: undefined }
+      create_experience: {
+        Args: {
+          _category: string
+          _comment: string
+          _place_id: string
+          _rating: number
+          _scores: Json
+          _stall_id: string
+          _would_return: boolean
+        }
+        Returns: string
+      }
       create_experience_once: {
         Args: {
           _category: string
@@ -629,7 +629,7 @@ export type Database = {
           _rating: number
           _request_id: string
           _scores: Json
-          _stall_id: string | null
+          _stall_id: string
           _would_return: boolean
         }
         Returns: string
