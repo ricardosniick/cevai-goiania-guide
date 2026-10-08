@@ -28,7 +28,7 @@ vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args), from: () => ({ upsert }) },
 }));
 
-import { searchPlaces, getPlaceDetails, ensurePlace, postSituation } from "./places.functions";
+import { searchPlaces, getPlaceDetails, searchGuestPlaces, getGuestPlaceDetails, ensurePlace, postSituation } from "./places.functions";
 import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG } from "./rate-limit";
 import { resolvePlacePhotos } from "./places.functions";
 
@@ -46,6 +46,8 @@ type Call = (data: unknown, ctx: unknown) => Promise<unknown>;
 const handlers: Array<{ name: string; fn: Call; input: unknown; bucket: string; global: string }> = [
   { name: "searchPlaces", fn: searchPlaces as unknown as Call, input: { query: "pizza", lat: -16.68, lng: -49.25 }, bucket: "search", global: "text_search" },
   { name: "getPlaceDetails", fn: getPlaceDetails as unknown as Call, input: { placeId: PLACE_ID }, bucket: "details", global: "details_full" },
+  { name: "searchGuestPlaces", fn: searchGuestPlaces as unknown as Call, input: { query: "pizza" }, bucket: "guest_search", global: "text_search" },
+  { name: "getGuestPlaceDetails", fn: getGuestPlaceDetails as unknown as Call, input: { placeId: PLACE_ID }, bucket: "guest_details", global: "details_full" },
   { name: "ensurePlace", fn: ensurePlace as unknown as Call, input: { placeId: PLACE_ID }, bucket: "ensure_place", global: "details_basic" },
   { name: "postSituation", fn: postSituation as unknown as Call, input: { placeId: PLACE_ID, lat: -16.68, lng: -49.25, accuracy: 20, situations: ["Tranquilo"] }, bucket: "situation_try", global: "details_basic" },
 ];
@@ -183,5 +185,32 @@ describe("fotos e teto global", () => {
     await (getPlaceDetails as unknown as Call)({ placeId: PLACE_ID, per_day: 999 } as never, context as never).catch(() => {});
     for (const c of globalRpc.mock.calls) expect(Object.keys(c[0] as object).sort()).toEqual(["_allow_partial", "_bucket", "_requested"]);
     expect(rpc.mock.calls.some((c) => c[0] === "set_global_api_limit")).toBe(false);
+  });
+});
+
+
+describe("visitor discovery boundaries", () => {
+  it("ignores supplied identity and shares the visitor allowance without writing places", async () => {
+    gatewayReply({ places: [{ id: PLACE_ID, displayName: { text: "Restaurante de teste" }, primaryType: "restaurant", types: ["restaurant"], location: { latitude: -16.6, longitude: -49.2 } }] });
+    const call = searchGuestPlaces as unknown as Call;
+    const out = await call({ query: "restaurante", userId: "forged", bucket: "search", limit: 999999 }, undefined);
+    expect(out).toHaveLength(1);
+    expect(userRpc.mock.calls[0]?.[0]).toEqual({ _user: "00000000-0000-0000-0000-000000000000", _bucket: "guest_search", _max: 30, _window_seconds: 60 });
+    expect(upsert).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "reserve_global_budget"]);
+  });
+  it("opens Google details without a session, without writing places or reading personal data", async () => {
+    gatewayReply({ id: PLACE_ID, displayName: { text: "Lugar de teste" } });
+    const out = await (getGuestPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, undefined);
+    expect(out).toMatchObject({ id: PLACE_ID, name: "Lugar de teste" });
+    expect(upsert).not.toHaveBeenCalled();
+    expect(userRpc.mock.calls[0]?.[0]).toMatchObject({ _bucket: "guest_details", _max: 60, _window_seconds: 60 });
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "reserve_global_budget"]);
+  });
+  it("rejects invalid visitor input before consuming either limit", async () => {
+    expect(() => (getGuestPlaceDetails as unknown as Call)({ placeId: "../private" }, undefined)).toThrow();
+    expect(() => (searchGuestPlaces as unknown as Call)({ radius: 999999 }, undefined)).toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
