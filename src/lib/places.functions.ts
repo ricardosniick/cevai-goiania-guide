@@ -221,11 +221,13 @@ const searchSchema = z.object({
   radius: z.number().min(300).max(25000).optional(),
 });
 
-export const searchPlaces = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => searchSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    await rateLimit(context.userId, "search", 30, 60);
+// Visitors share server-owned buckets: no client identity, anonymous Auth account, or RLS grant.
+// A caller cannot reset this allowance by clearing storage or supplying another user ID.
+const GUEST_RATE_ID = "00000000-0000-0000-0000-000000000000";
+const detailSchema = z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) });
+
+async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: string, bucket: string, persist: boolean): Promise<PlaceSummary[]> {
+    await rateLimit(userId, bucket, 30, 60);
     const center = { latitude: data.lat ?? GOIANIA.lat, longitude: data.lng ?? GOIANIA.lng };
     const filter = resolveFilter(data.category);
     let result: { places?: GPlace[] };
@@ -265,7 +267,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const kept = raw.slice(0, 20);
     const urls = await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)));
     const places = kept.map((p) => toSummary(p, urls, 600, forced));
-    if (places.length) {
+    if (persist && places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("places").upsert(
@@ -274,16 +276,13 @@ export const searchPlaces = createServerFn({ method: "POST" })
       );
     }
     return places;
-  });
+}
 
-export const getPlaceDetails = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
-  .handler(async ({ data, context }): Promise<PlaceDetails> => {
-    await rateLimit(context.userId, "details", 60, 60);
+async function placeDetailData(placeId: string, userId: string, bucket: string, persist: boolean): Promise<PlaceDetails> {
+    await rateLimit(userId, bucket, 60, 60);
     await requireGlobal("details_full");
     const mask = "id,displayName,formattedAddress,shortFormattedAddress,location,primaryType,types,primaryTypeDisplayName,rating,userRatingCount,photos,editorialSummary,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions";
-    const place = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers(mask) });
+    const place = await gateway<GPlace>(`/places/v1/places/${placeId}?languageCode=pt-BR`, { headers: headers(mask) });
     // Cover (1000px) first, then gallery (800px): when the photo reservation is partial, the cover wins.
     const cover = validPhotoName(place.photos?.[0]);
     const gallery = (place.photos ?? []).slice(0, 6);
@@ -295,8 +294,10 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       const url = n ? urls[photoKey(n, 800)] : undefined;
       return url ? { url, attribution: p.authorAttributions?.[0]?.displayName ?? null } : null;
     }).filter((p): p is { url: string; attribution: string | null } => p !== null);
+    if (persist) {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_name: summary.photoName, updated_at: new Date().toISOString(), coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
+    }
     return {
       ...summary,
       address: place.formattedAddress ?? summary.address,
@@ -307,7 +308,26 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
       hours: place.regularOpeningHours?.weekdayDescriptions ?? [],
       photos,
     };
-  });
+}
+
+export const searchPlaces = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => searchSchema.parse(data))
+  .handler(({ data, context }) => searchPlaceData(data, context.userId, "search", true));
+
+export const getPlaceDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => detailSchema.parse(data))
+  .handler(({ data, context }) => placeDetailData(data.placeId, context.userId, "details", true));
+
+/** Public Google-sourced discovery only; private/community content and writes remain authenticated. */
+export const searchGuestPlaces = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => searchSchema.parse(data))
+  .handler(({ data }) => searchPlaceData(data, GUEST_RATE_ID, "guest_search", false));
+
+export const getGuestPlaceDetails = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => detailSchema.parse(data))
+  .handler(({ data }) => placeDetailData(data.placeId, GUEST_RATE_ID, "guest_details", false));
 
 /** Turns stored Google photo names into fresh display URLs (cover size). Missing/failed ones are simply omitted. */
 export const resolvePlacePhotos = createServerFn({ method: "POST" })
