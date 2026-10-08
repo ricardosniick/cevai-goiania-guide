@@ -59,7 +59,14 @@ type GPlace = {
 /** One shared load of the server-only admin client (also avoids parallel dynamic imports racing). */
 let adminPromise: Promise<typeof import("@/integrations/supabase/client.server")["supabaseAdmin"]> | null = null;
 function loadAdmin() {
-  adminPromise ??= import("@/integrations/supabase/client.server").then((m) => m.supabaseAdmin);
+  adminPromise ??= import("@/integrations/supabase/client.server").then(
+    (m) => m.supabaseAdmin,
+    (e) => {
+      // A failed import must not be cached forever: allow a later attempt (this request still fails).
+      adminPromise = null;
+      throw e;
+    },
+  );
   return adminPromise;
 }
 
