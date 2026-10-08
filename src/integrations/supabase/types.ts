@@ -274,6 +274,48 @@ export type Database = {
           },
         ]
       }
+      global_api_limits: {
+        Row: {
+          bucket: string
+          per_day: number
+          per_minute: number
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          per_day: number
+          per_minute: number
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          per_day?: number
+          per_minute?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      global_api_usage: {
+        Row: {
+          bucket: string
+          used: number
+          window_kind: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          used: number
+          window_kind: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          used?: number
+          window_kind?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       place_presence: {
         Row: {
           expires_at: string
@@ -568,6 +610,7 @@ export type Database = {
       }
       cleanup_presence: { Args: never; Returns: undefined }
       end_presence: { Args: never; Returns: undefined }
+      global_budget_clock: { Args: never; Returns: string }
       hit_rate_limit: {
         Args: {
           _bucket: string
@@ -633,6 +676,10 @@ export type Database = {
         }
         Returns: string
       }
+      reserve_global_budget: {
+        Args: { _allow_partial: boolean; _bucket: string; _requested: number }
+        Returns: number
+      }
       respond_connection: {
         Args: { _action: string; _id: string }
         Returns: undefined
@@ -643,6 +690,10 @@ export type Database = {
       }
       send_connection: {
         Args: { _place_id: string; _to: string }
+        Returns: undefined
+      }
+      set_global_api_limit: {
+        Args: { _bucket: string; _per_day: number; _per_minute: number }
         Returns: undefined
       }
       stall_experience_stats: {
