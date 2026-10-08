@@ -84,8 +84,9 @@ describe("resolvePhotoBatch + teto global", () => {
   it("global retornando mais que o pedido não libera extras", async () => {
     const s = setup({}, async () => "allow");
     s.reserveGlobal.mockResolvedValue(99);
-    await resolvePhotoBatch(["a", "b"], s.deps);
-    expect(s.fetchUrl).toHaveBeenCalledTimes(2);
+    const out = await resolvePhotoBatch(["a", "b"], s.deps);
+    expect(s.fetchUrl).not.toHaveBeenCalled();
+    expect(out).toEqual({});
   });
   it.each([0, -1, 1.5, NaN])("global %s → nenhuma chamada", async (v) => {
     const s = setup({}, async () => "allow");
