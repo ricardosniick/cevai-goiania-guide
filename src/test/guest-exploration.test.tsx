@@ -5,7 +5,7 @@ import type { ComponentType } from "react";
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn(), details: vi.fn(), memberSearch: vi.fn(), memberDetails: vi.fn(),
-  from: vi.fn(), rpc: vi.fn(),
+  from: vi.fn(), rpc: vi.fn(), pendingLink: vi.fn(),
 }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
@@ -23,12 +23,19 @@ vi.mock("@/lib/places.functions", () => ({
   ensurePlace: vi.fn(), postSituation: vi.fn(),
 }));
 vi.mock("@/components/cevai/InstallPrompt", () => ({
-  InstallPrompt: () => null, captureSharedLink: () => false, takePendingLink: () => null,
+  InstallPrompt: () => null, captureSharedLink: () => false, takePendingLink: mocks.pendingLink,
   shareUrlFor: () => "https://example.test/?lugar=test",
 }));
 vi.mock("@/components/cevai/MapView", () => ({
   hasCoords: () => true,
-  MapView: () => <div data-testid="guest-map" />,
+  MapView: ({ onIdle, onSelect, markers }: {
+    onIdle?: (area: { lat: number; lng: number; radius: number }) => void;
+    onSelect?: (id: string) => void;
+    markers: Array<{ id: string; label: string }>;
+  }) => <div data-testid="guest-map">
+    <button onClick={() => onIdle?.({ lat: -16.68, lng: -49.25, radius: 1000 })}>Finalizar movimento do mapa</button>
+    {markers.map((m) => <button key={m.id} onClick={() => onSelect?.(m.id)}>Selecionar marcador {m.label}</button>)}
+  </div>,
 }));
 
 import { Route } from "@/routes/index";
@@ -42,6 +49,8 @@ const place = {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  mocks.pendingLink.mockReset();
+  mocks.pendingLink.mockReturnValue(null);
   mocks.search.mockResolvedValue([place]);
   mocks.details.mockResolvedValue({ ...place, summary: null, phone: null, website: null, mapsUrl: null, hours: [], photos: [] });
   mocks.from.mockImplementation(() => { throw new Error("Visitor must not access personal tables"); });
@@ -49,9 +58,12 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-async function explore() {
+function mountApp() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={qc}><App /></QueryClientProvider>);
+}
+async function explore() {
+  mountApp();
   await waitFor(() => expect(screen.getByRole("button", { name: "Criar conta" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Explorar sem entrar" }));
   await screen.findByText(place.name);
@@ -93,4 +105,30 @@ describe("visitor exploration", () => {
     expect(screen.getByTestId("guest-map")).toBeInTheDocument();
     expect(screen.queryByText("Entre para ver lugares reais perto de você no mapa.")).not.toBeInTheDocument();
   });
+  it("opens a shared place link without requiring login or querying personal data", async () => {
+    mocks.pendingLink.mockReturnValueOnce(place.id);
+    mountApp();
+    await screen.findByText("Avaliação do Google");
+    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id } });
+    expect(screen.queryByText("Esqueci minha senha")).not.toBeInTheDocument();
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("searches the map viewport, selects a marker and opens visitor details", async () => {
+    await explore();
+    fireEvent.click(screen.getByRole("button", { name: "Mapa" }));
+    mocks.search.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Finalizar movimento do mapa" }));
+    await waitFor(() => expect(mocks.search).toHaveBeenCalledWith({ data: {
+      category: undefined, query: undefined, lat: -16.68, lng: -49.25, radius: 1000,
+    } }));
+    fireEvent.click(await screen.findByRole("button", { name: `Selecionar marcador ${place.name}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver lugar" }));
+    await screen.findByText("Avaliação do Google");
+    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id } });
+    expect(mocks.memberSearch).not.toHaveBeenCalled();
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
 });
