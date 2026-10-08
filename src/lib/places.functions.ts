@@ -216,6 +216,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
     let result: { places?: GPlace[] };
     const textQuery = data.query ? (filter.text ? `${filter.text} ${data.query}` : data.query) : filter.text;
     if (textQuery) {
+      await requireGlobal("text_search");
       result = await gateway(`/places/v1/places:searchText`, {
         method: "POST",
         headers: headers(SEARCH_MASK),
@@ -229,6 +230,7 @@ export const searchPlaces = createServerFn({ method: "POST" })
         }),
       });
     } else {
+      await requireGlobal("nearby_search");
       result = await gateway(`/places/v1/places:searchNearby`, {
         method: "POST",
         headers: headers(SEARCH_MASK),
@@ -245,7 +247,9 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const forced = !data.query && filter.label ? filter.label : undefined;
     // Filtered searches (Destaques, categories, text) keep only places of active categories; dropped places get no photo calls and are not stored.
     const raw = RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace(p.primaryType, p.types ?? [], p.displayName?.text ?? "", forced)) : (result.places ?? []);
-    const places = await Promise.all(raw.slice(0, 20).map((p) => toSummary(p, 600, forced)));
+    const kept = raw.slice(0, 20);
+    const urls = await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)));
+    const places = kept.map((p) => toSummary(p, urls, 600, forced));
     if (places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -262,13 +266,20 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) }).parse(data))
   .handler(async ({ data, context }): Promise<PlaceDetails> => {
     await rateLimit(context.userId, "details", 60, 60);
+    await requireGlobal("details_full");
     const mask = "id,displayName,formattedAddress,shortFormattedAddress,location,primaryType,types,primaryTypeDisplayName,rating,userRatingCount,photos,editorialSummary,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions";
     const place = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers(mask) });
-    const summary = await toSummary(place, 1000);
-    const photos = (await Promise.all((place.photos ?? []).slice(0, 6).map(async (p) => {
-      const url = await photoUrl(p, 800);
+    // Cover (1000px) first, then gallery (800px): when the photo reservation is partial, the cover wins.
+    const cover = validPhotoName(place.photos?.[0]);
+    const gallery = (place.photos ?? []).slice(0, 6);
+    const keys = [...(cover ? [photoKey(cover, 1000)] : []), ...gallery.map(validPhotoName).filter((n): n is string => !!n).map((n) => photoKey(n, 800))];
+    const urls = await resolvePhotoKeys(keys);
+    const summary = toSummary(place, urls, 1000);
+    const photos = gallery.map((p) => {
+      const n = validPhotoName(p);
+      const url = n ? urls[photoKey(n, 800)] : undefined;
       return url ? { url, attribution: p.authorAttributions?.[0]?.displayName ?? null } : null;
-    }))).filter((p): p is { url: string; attribution: string | null } => p !== null);
+    }).filter((p): p is { url: string; attribution: string | null } => p !== null);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("places").upsert({ google_place_id: summary.id, name: summary.name, address: place.formattedAddress ?? summary.address, category: summary.category, lat: summary.lat, lng: summary.lng, photo_name: summary.photoName, updated_at: new Date().toISOString(), coords_fetched_at: new Date().toISOString() }, { onConflict: "google_place_id" });
     return {
@@ -288,12 +299,11 @@ export const resolvePlacePhotos = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(30) }).parse(data))
   .handler(async ({ data, context }) => {
-    // Cached photos are free; each missing one needs an explicit grant (errors/unexpected results deny).
-    return resolvePhotoBatch(data.names, {
-      cacheGet: (n) => cacheGet(`${n}:600`),
-      checkLimit: () => checkRate(context.userId, "photos_new", PHOTO_NEW_PER_MINUTE, 60),
-      fetchUrl: (n) => photoUrl({ name: n }, 600),
-    });
+    // Cached photos are free; each missing one needs a per-person grant and then a global reservation.
+    const urls = await resolvePhotoKeys(data.names.map((n) => photoKey(n, 600)), () => checkRate(context.userId, "photos_new", PHOTO_NEW_PER_MINUTE, 60));
+    const out: Record<string, string> = {};
+    for (const n of data.names) { const u = urls[photoKey(n, 600)]; if (u) out[n] = u; }
+    return out;
   });
 
 /** Makes sure a place row exists before user content references it. Client sends only the id; data comes from Google. */
