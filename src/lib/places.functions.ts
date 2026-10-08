@@ -62,11 +62,10 @@ async function checkRate(userId: string, bucket: string, max: number, windowSeco
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
     const d = rateDecision(data, error);
-    console.log("DBGD", JSON.stringify({data, error}));
     if (d === "unavailable") console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error ?? data);
     return d;
   } catch (e) {
-    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e); console.log("DBGT", String(e));
+    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e);
     return "unavailable";
   }
 }
@@ -162,7 +161,7 @@ async function fetchPhotoUrl(key: string): Promise<string | null> {
 function resolvePhotoKeys(keys: string[], checkLimit?: () => Promise<RateDecision>): Promise<Record<string, string>> {
   return resolvePhotoBatch(keys, {
     cacheGet,
-    checkLimit,
+    ...(checkLimit ? { checkLimit } : {}),
     reserveGlobal: (n) => reserveGlobal("photo", n, true),
     fetchUrl: fetchPhotoUrl,
   });
