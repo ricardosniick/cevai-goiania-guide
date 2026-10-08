@@ -599,6 +599,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_experience: {
+        Args: {
+          _place_id: string
+          _category: string
+          _rating: number
+          _comment: string
+          _would_return: boolean
+          _stall_id: string | null
+          _scores: Json
+        }
+        Returns: string
+      }
       chat_messages_for: {
         Args: { _request_id: string }
         Returns: {

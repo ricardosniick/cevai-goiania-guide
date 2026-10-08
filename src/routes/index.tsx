@@ -659,13 +659,16 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
     }
     try {
       await ensurePlaceFn({ data: { placeId: place.id } });
-      const { data: exp, error } = await supabase.from("experiences").insert({ user_id: user.id, place_id: place.id, category: place.category, rating, comment: comment.trim() || null, would_return: wouldReturn, stall_id: initialStall?.id ?? null }).select("id").single();
-      if (error || !exp) throw error ?? new Error("insert");
-      const scoreRows = Object.entries(scores).map(([criterion, score]) => ({ experience_id: exp.id, criterion, score }));
+      // Experience and criteria scores commit together, before uploading any photos.
+      const { data: experienceId, error } = await supabase.rpc("create_experience", {
+        _place_id: place.id, _category: place.category, _rating: rating,
+        _comment: comment.trim(), _would_return: wouldReturn,
+        _stall_id: initialStall?.id ?? null, _scores: scores,
+      });
+      if (error || !experienceId) throw error ?? new Error("insert");
       let photoFailed = false;
-      if (scoreRows.length) { const sc = await supabase.from("experience_scores").insert(scoreRows); if (sc.error) { console.error("[erro] experience_scores", sc.error); setTimeout(() => notify("As notas por critério não puderam ser salvas. Edite a experiência para tentar de novo."), 2500); } }
       for (const f of files) {
-        if (!(await saveExperiencePhoto(user.id, exp.id, f))) photoFailed = true;
+        if (!(await saveExperiencePhoto(user.id, experienceId, f))) photoFailed = true;
       }
       if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
       const sv = await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
