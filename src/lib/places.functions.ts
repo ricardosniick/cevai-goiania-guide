@@ -315,6 +315,7 @@ export const ensurePlace = createServerFn({ method: "POST" })
     // Existing rows with coordinates are kept; rows whose coordinates expired (Google 30-day cache rule) are refreshed below.
     if (existing && existing.lat != null && existing.lng != null) return { ok: true };
     await rateLimit(context.userId, "ensure_place", 20, 60);
+    await requireGlobal("details_basic");
     const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
     if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -342,6 +343,7 @@ export const startPresence = createServerFn({ method: "POST" })
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
     await rateLimit(context.userId, "presence_try", 30, 3600);
+    await requireGlobal("details_basic");
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -379,6 +381,7 @@ export const postSituation = createServerFn({ method: "POST" })
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
     await rateLimit(context.userId, "situation_try", 30, 3600);
+    await requireGlobal("details_basic");
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
