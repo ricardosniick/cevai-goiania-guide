@@ -663,7 +663,7 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       const { data: experienceId, error } = await supabase.rpc("create_experience", {
         _place_id: place.id, _category: place.category, _rating: rating,
         _comment: comment.trim(), _would_return: wouldReturn,
-        _stall_id: initialStall?.id ?? null, _scores: scores,
+        _stall_id: (initialStall?.id ?? null) as string, _scores: scores, // null é aceito pela função; o tipo gerado omite a nulabilidade
       });
       if (error || !experienceId) throw error ?? new Error("insert");
       let photoFailed = false;
