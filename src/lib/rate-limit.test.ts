@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { rateDecision, resolvePhotoBatch, type RateDecision } from "./rate-limit";
+import { globalDecision, rateDecision, resolvePhotoBatch, type RateDecision } from "./rate-limit";
 
 describe("rateDecision", () => {
   it("1. allows only on explicit true", () => expect(rateDecision(true, null)).toBe("allow"));
@@ -14,7 +14,8 @@ function setup(cache: Record<string, string>, decisions: RateDecision[] | (() =>
   const fetchUrl = vi.fn(async (n: string) => `g:${n}`);
   let i = 0;
   const checkLimit = vi.fn(typeof decisions === "function" ? decisions : async () => decisions[i++] ?? "unavailable");
-  return { fetchUrl, checkLimit, deps: { cacheGet: (n: string) => cache[n] ?? null, checkLimit, fetchUrl } };
+  const reserveGlobal = vi.fn(async (n: number) => n);
+  return { fetchUrl, checkLimit, reserveGlobal, deps: { cacheGet: (n: string) => cache[n] ?? null, checkLimit, reserveGlobal, fetchUrl } };
 }
 
 describe("resolvePhotoBatch", () => {
@@ -47,5 +48,67 @@ describe("resolvePhotoBatch", () => {
     const out = await resolvePhotoBatch(["z", "a", "b", "c", "d"], s.deps);
     expect(s.fetchUrl).toHaveBeenCalledTimes(2);
     expect(out).toEqual({ z: "c:z", a: "g:a", b: "g:b" });
+  });
+});
+
+describe("globalDecision (reserve_global_budget)", () => {
+  it("n>0 até o pedido concede n", () => expect(globalDecision(3, null, 5)).toEqual({ status: "granted", granted: 3 }));
+  it("0 = teto atingido", () => expect(globalDecision(0, null, 1)).toEqual({ status: "exhausted", granted: 0 }));
+  it("-1 = não configurado", () => expect(globalDecision(-1, null, 1)).toEqual({ status: "unconfigured", granted: 0 }));
+  it("erro bloqueia mesmo com número", () => expect(globalDecision(1, { message: "x" }, 1).granted).toBe(0));
+  it("valores inesperados bloqueiam", () => {
+    for (const v of [null, undefined, true, "1", 1.5, -2, 6, NaN, {}]) expect(globalDecision(v, null, 5)).toEqual({ status: "unavailable", granted: 0 });
+  });
+});
+
+describe("resolvePhotoBatch + teto global", () => {
+  it("limite por pessoa antes do global; global recebe só os autorizados", async () => {
+    const order: string[] = [];
+    const s = setup({}, async () => { order.push("user"); return "allow"; });
+    s.reserveGlobal.mockImplementation(async (n: number) => { order.push(`global:${n}`); return n; });
+    await resolvePhotoBatch(["a", "b"], s.deps);
+    expect(order).toEqual(["user", "user", "global:2"]);
+  });
+  it("sem autorização por pessoa, não reserva global", async () => {
+    const s = setup({}, ["limited"]);
+    await resolvePhotoBatch(["a"], s.deps);
+    expect(s.reserveGlobal).not.toHaveBeenCalled();
+  });
+  it("reserva parcial: no máximo a quantidade concedida", async () => {
+    const s = setup({}, async () => "allow");
+    s.reserveGlobal.mockResolvedValue(2);
+    const out = await resolvePhotoBatch(["a", "b", "c", "d"], s.deps);
+    expect(s.fetchUrl).toHaveBeenCalledTimes(2);
+    expect(Object.keys(out)).toEqual(["a", "b"]);
+  });
+  it("global retornando mais que o pedido não libera extras", async () => {
+    const s = setup({}, async () => "allow");
+    s.reserveGlobal.mockResolvedValue(99);
+    await resolvePhotoBatch(["a", "b"], s.deps);
+    expect(s.fetchUrl).toHaveBeenCalledTimes(2);
+  });
+  it.each([0, -1, 1.5, NaN])("global %s → nenhuma chamada", async (v) => {
+    const s = setup({}, async () => "allow");
+    s.reserveGlobal.mockResolvedValue(v);
+    await resolvePhotoBatch(["a"], s.deps);
+    expect(s.fetchUrl).not.toHaveBeenCalled();
+  });
+  it("global lançando exceção → nenhuma chamada", async () => {
+    const s = setup({}, async () => "allow");
+    s.reserveGlobal.mockRejectedValue(new Error("down"));
+    await resolvePhotoBatch(["a"], s.deps);
+    expect(s.fetchUrl).not.toHaveBeenCalled();
+  });
+  it("sem checkLimit (busca/detalhes) vai direto ao global; cache não reserva", async () => {
+    const s = setup({ a: "c:a" }, []);
+    const { checkLimit: _c, ...deps } = s.deps;
+    await resolvePhotoBatch(["a", "b"], deps);
+    expect(s.reserveGlobal).toHaveBeenCalledWith(1);
+    expect(s.fetchUrl).toHaveBeenCalledWith("b");
+  });
+  it("só cache → nenhuma reserva", async () => {
+    const s = setup({ a: "c:a" }, []);
+    await resolvePhotoBatch(["a"], s.deps);
+    expect(s.reserveGlobal).not.toHaveBeenCalled();
   });
 });
