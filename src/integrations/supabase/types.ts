@@ -609,6 +609,18 @@ export type Database = {
         }[]
       }
       cleanup_presence: { Args: never; Returns: undefined }
+      create_experience: {
+        Args: {
+          _category: string
+          _comment: string
+          _place_id: string
+          _rating: number
+          _scores: Json
+          _stall_id: string
+          _would_return: boolean
+        }
+        Returns: string
+      }
       end_presence: { Args: never; Returns: undefined }
       global_budget_clock: { Args: never; Returns: string }
       hit_rate_limit: {
