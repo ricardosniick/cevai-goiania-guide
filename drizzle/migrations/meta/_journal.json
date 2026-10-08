@@ -85,6 +85,13 @@
       "when": 1791466834121,
       "tag": "0011_p1_experience_photos_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791468634377,
+      "tag": "0012_p2_revoke_anon_stats_execute",
+      "breakpoints": true
     }
   ]
 }
