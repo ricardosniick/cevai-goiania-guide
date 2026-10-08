@@ -623,6 +623,9 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
   const [kept, setKept] = useState(editing?.photoItems ?? []);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const submitLock = useRef(false);
+  const [createRequestId] = useState(() => crypto.randomUUID());
+  const completedPhotoUploads = useRef(new Set<File>());
   const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
@@ -633,7 +636,8 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
   const addFiles = (e: ChangeEvent<HTMLInputElement>) => { const picked = Array.from(e.target.files ?? []); setFiles((cur) => selectExperiencePhotos(cur, picked, kept.length)); e.target.value = ""; };
 
   const submit = async () => {
-    if (!place || !rating) return;
+    if (!place || !rating || submitLock.current) return;
+    submitLock.current = true;
     setSaving(true);
     if (editing) {
       try {
@@ -654,13 +658,14 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
         }
         if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
         onSaved();
-      } catch (e) { notify(friendlyError(e, "Não foi possível atualizar. Tente de novo.", "update experience")); } finally { setSaving(false); }
+      } catch (e) { notify(friendlyError(e, "Não foi possível atualizar. Tente de novo.", "update experience")); } finally { submitLock.current = false; setSaving(false); }
       return;
     }
     try {
       await ensurePlaceFn({ data: { placeId: place.id } });
       // Experience and criteria scores commit together, before uploading any photos.
-      const { data: experienceId, error } = await supabase.rpc("create_experience", {
+      const { data: experienceId, error } = await supabase.rpc("create_experience_once", {
+        _request_id: createRequestId,
         _place_id: place.id, _category: place.category, _rating: rating,
         _comment: comment.trim(), _would_return: wouldReturn,
         _stall_id: (initialStall?.id ?? null) as string, _scores: scores, // null é aceito pela função; o tipo gerado omite a nulabilidade
@@ -668,15 +673,18 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
       if (error || !experienceId) throw error ?? new Error("insert");
       let photoFailed = false;
       for (const f of files) {
-        if (!(await saveExperiencePhoto(user.id, experienceId, f))) photoFailed = true;
+        if (completedPhotoUploads.current.has(f)) continue;
+        if (await saveExperiencePhoto(user.id, experienceId, f)) completedPhotoUploads.current.add(f);
+        else photoFailed = true;
       }
       if (photoFailed) setTimeout(() => notify("Algumas fotos não puderam ser salvas. Tente de novo."), 2500);
       const sv = await supabase.from("saved_places").upsert({ user_id: user.id, place_id: place.id, list: "ja_fui" }, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
       if (sv.error) console.error("[erro] saved_places ja_fui", sv.error);
       onSaved();
     } catch (e) {
-      notify(friendlyError(e, "Não foi possível registrar. Tente de novo.", "create experience"));
-    } finally { setSaving(false); }
+      const message = typeof e === "object" && e && "message" in e ? String(e.message) : "";
+      notify(friendlyError(e, message === "request_conflict" ? "Essa tentativa já foi salva com outros dados. Confira seu diário antes de tentar de novo." : "Não foi possível registrar. Tente de novo.", "create experience"));
+    } finally { submitLock.current = false; setSaving(false); }
   };
 
   return <div className="absolute inset-0 z-40 flex items-end bg-foreground/40" onClick={onClose}>
