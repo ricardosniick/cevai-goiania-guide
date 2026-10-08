@@ -127,6 +127,13 @@
       "when": 1791488307941,
       "tag": "0017_create_experience_once",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791491025061,
+      "tag": "0018_fair_stalls_hide_creator",
+      "breakpoints": true
     }
   ]
 }
