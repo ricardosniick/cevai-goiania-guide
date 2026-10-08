@@ -13,7 +13,7 @@ import { CeVaiRating, Field, ListError } from "@/components/cevai/shared";
 
 export function StallsPanel({ place, user, onRegister, notify }: { place: PlaceSummary; user: User; onRegister: (s: Stall) => void; notify: (m: string) => void }) {
   const qc = useQueryClient();
-  const stalls = useQuery({ queryKey: ["stalls", place.id], queryFn: async () => { const { data, error } = await supabase.from("fair_stalls").select("id, place_id, name, kind, emoji, created_by").eq("place_id", place.id).order("created_at"); if (error) throw error; return data as Stall[]; } });
+  const stalls = useQuery({ queryKey: ["stalls", place.id], queryFn: async () => { const { data, error } = await supabase.from("fair_stalls").select("id, place_id, name, kind, emoji").eq("place_id", place.id).order("created_at"); if (error) throw error; return data as Stall[]; } });
   const ids = (stalls.data ?? []).map((x) => x.id);
   const stats = useQuery({ queryKey: ["stall-stats", ids.join(",")], enabled: ids.length > 0, queryFn: async () => { const { data, error } = await supabase.rpc("stall_experience_stats", { _stall_ids: ids }); if (error) throw error; const m: Record<string, PlaceStat> = {}; (data ?? []).forEach((r) => { m[r.stall_id] = { avg: Number(r.avg_rating), count: Number(r.experience_count) }; }); return m; } });
   const [adding, setAdding] = useState(false); const [name, setName] = useState(""); const [kind, setKind] = useState(STALL_KINDS[0]!);

@@ -6,7 +6,7 @@ export type SavedList = "quero_conhecer" | "ja_fui" | "favoritos";
 
 export const LIST_LABELS: Record<SavedList, string> = { quero_conhecer: "Quero conhecer", ja_fui: "Já fui", favoritos: "Favoritos" };
 
-export type Stall = { id: string; place_id: string; name: string; kind: string; emoji: string; created_by: string };
+export type Stall = { id: string; place_id: string; name: string; kind: string; emoji: string };
 export type Experience = {
   id: string; place_id: string; stall_id: string | null; stall: { name: string; emoji: string } | null; category: string; rating: number; comment: string | null; would_return: boolean; is_public: boolean; created_at: string; user_id: string;
   place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
