@@ -5,6 +5,7 @@ import { BookOpen, Camera, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyError } from "@/lib/errors";
+import { saveBook } from "@/lib/save-book";
 import { Field, ListError, Stars } from "@/components/cevai/shared";
 
 const BOOK_STATUS = { quero_ler: "Quero ler", lendo: "Lendo", terminei: "Terminei" } as const;
@@ -24,10 +25,7 @@ export function BooksPanel({ user, notify }: { user: User; notify: (m: string) =
   const save = async () => {
     setSaving(true);
     try {
-      let photo_path: string | null = null; let photoFailed = false;
-      if (file && file.size <= 10 * 1024 * 1024) { const path = `${user.id}/books/${Date.now()}.${(file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "")}`; const up = await supabase.storage.from("experience-photos").upload(path, file, { contentType: file.type }); if (!up.error) photo_path = path; else { console.error("[erro] book photo upload", up.error); photoFailed = true; } }
-      const { error } = await supabase.from("books").insert({ user_id: user.id, title: title.trim(), author: author.trim() || null, status, rating: rating || null, comment: comment.trim() || null, would_recommend: status === "terminei" ? rec : null, photo_path });
-      if (error) return notify(friendlyError(error, "Não foi possível salvar o livro.", "books"));
+      const { photoFailed } = await saveBook({ user_id: user.id, title: title.trim(), author: author.trim() || null, status, rating: rating || null, comment: comment.trim() || null, would_recommend: status === "terminei" ? rec : null }, file);
       setOpen(false); setTitle(""); setAuthor(""); setRating(0); setComment(""); setFile(null); notify(photoFailed ? "Livro registrado, mas a foto não pôde ser salva." : "Livro registrado!"); void qc.invalidateQueries({ queryKey: ["books"] });
     } catch (e) { notify(friendlyError(e, "Não foi possível salvar o livro.", "books")); } finally { setSaving(false); }
   };
