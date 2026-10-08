@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { effectiveRadius, isInsideArea } from "./geo";
-import { splitByCache, withinBudget, PHOTO_NEW_PER_MINUTE } from "./photo-budget";
+import { PHOTO_NEW_PER_MINUTE } from "./photo-budget";
+import { RATE_MSG, RATE_UNAVAILABLE_MSG, rateDecision, resolvePhotoBatch, type RateDecision } from "./rate-limit";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES, isActivePlace } from "./categories";
@@ -54,17 +55,23 @@ type GPlace = {
   regularOpeningHours?: { weekdayDescriptions?: string[] };
 };
 
-const RATE_MSG = "Muitas tentativas. Tente de novo em alguns instantes.";
-/** Atomic per-user limit (SQL advisory lock). Throws a friendly message when exceeded. */
-async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG, failClosed = false) {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
-  if (error) {
-    console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error);
-    if (failClosed) throw new Error(message);
-    return;
+/** Atomic per-user limit (SQL advisory lock). Always fail-closed: only an explicit grant lets the call continue. */
+async function checkRate(userId: string, bucket: string, max: number, windowSeconds: number): Promise<RateDecision> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
+    const d = rateDecision(data, error);
+    if (d === "unavailable") console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error ?? data);
+    return d;
+  } catch (e) {
+    console.error(`[rate-limit] check threw bucket=${bucket} user=${userId}`, e);
+    return "unavailable";
   }
-  if (data === false) throw new Error(message);
+}
+async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
+  const d = await checkRate(userId, bucket, max, windowSeconds);
+  if (d === "limited") throw new Error(message);
+  if (d === "unavailable") throw new Error(RATE_UNAVAILABLE_MSG);
 }
 
 /** Bounded photo URL cache: max 500 entries, 30-min validity, oldest evicted first. */
@@ -239,20 +246,12 @@ export const resolvePlacePhotos = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ names: z.array(z.string().regex(PHOTO_NAME_RE)).max(30) }).parse(data))
   .handler(async ({ data, context }) => {
-    const out: Record<string, string> = {};
-    const { cached, missing } = splitByCache(data.names, (n) => !!cacheGet(`${n}:600`));
-    cached.forEach((n) => { const c = cacheGet(`${n}:600`); if (c) out[n] = c; });
-    if (!missing.length) return out;
-    // Each photo NOT in cache spends one slot of the per-person budget; over the limit, only cached photos are returned.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const grants = await Promise.all(missing.map(async () => {
-      const { data: ok, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: context.userId, _bucket: "photos_new", _max: PHOTO_NEW_PER_MINUTE, _window_seconds: 60 });
-      if (error) { console.error(`[rate-limit] check failed bucket=photos_new user=${context.userId}`, error); return true; }
-      return ok !== false;
-    }));
-    const allowed = withinBudget(missing, grants.filter(Boolean).length);
-    await Promise.all(allowed.map(async (n) => { const u = await photoUrl({ name: n }, 600); if (u) out[n] = u; }));
-    return out;
+    // Cached photos are free; each missing one needs an explicit grant (errors/unexpected results deny).
+    return resolvePhotoBatch(data.names, {
+      cacheGet: (n) => cacheGet(`${n}:600`),
+      checkLimit: () => checkRate(context.userId, "photos_new", PHOTO_NEW_PER_MINUTE, 60),
+      fetchUrl: (n) => photoUrl({ name: n }, 600),
+    });
   });
 
 /** Makes sure a place row exists before user content references it. Client sends only the id; data comes from Google. */
@@ -263,7 +262,7 @@ export const ensurePlace = createServerFn({ method: "POST" })
     const { data: existing } = await context.supabase.from("places").select("google_place_id, lat, lng").eq("google_place_id", data.placeId).maybeSingle();
     // Existing rows with coordinates are kept; rows whose coordinates expired (Google 30-day cache rule) are refreshed below.
     if (existing && existing.lat != null && existing.lng != null) return { ok: true };
-    await rateLimit(context.userId, "ensure_place", 20, 60, RATE_MSG, true);
+    await rateLimit(context.userId, "ensure_place", 20, 60);
     const g = await gateway<GPlace>(`/places/v1/places/${data.placeId}?languageCode=pt-BR`, { headers: headers("id,displayName,formattedAddress,location,primaryType,types") });
     if (!g.id || !g.location) throw new Error("Lugar não encontrado no Google.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -290,7 +289,7 @@ export const startPresence = createServerFn({ method: "POST" })
     if (PRESENCE_DISABLED) throw new Error("O recurso “Estou aqui” não está disponível nesta versão.");
     const { allowsPresence, presenceRadius, presenceInterests } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo ao ar livre ou com o GPS ativado.");
-    await rateLimit(context.userId, "presence_try", 30, 3600, RATE_MSG, true);
+    await rateLimit(context.userId, "presence_try", 30, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
@@ -327,7 +326,7 @@ export const postSituation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { situationKind, situationRadius, SITUATION_OPTIONS } = await import("./categories");
     if (data.accuracy > 150) throw new Error("Sua localização está imprecisa. Tente de novo com o GPS ativado.");
-    await rateLimit(context.userId, "situation_try", 30, 3600, RATE_MSG, true);
+    await rateLimit(context.userId, "situation_try", 30, 3600);
     const g = await gateway<GPlace & { viewport?: { low: { latitude: number; longitude: number }; high: { latitude: number; longitude: number } } }>(
       `/places/v1/places/${encodeURIComponent(data.placeId)}`,
       { headers: headers("id,displayName,formattedAddress,location,primaryType,types,viewport") },
