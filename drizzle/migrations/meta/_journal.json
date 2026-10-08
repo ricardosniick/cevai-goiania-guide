@@ -92,6 +92,13 @@
       "when": 1791468634377,
       "tag": "0012_p2_revoke_anon_stats_execute",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791469281596,
+      "tag": "0013_p3_read_shared_experience_photos",
+      "breakpoints": true
     }
   ]
 }
