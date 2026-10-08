@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { effectiveRadius, isInsideArea } from "./geo";
 import { PHOTO_NEW_PER_MINUTE } from "./photo-budget";
-import { RATE_MSG, RATE_UNAVAILABLE_MSG, rateDecision, resolvePhotoBatch, type RateDecision } from "./rate-limit";
+import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG, globalDecision, rateDecision, resolvePhotoBatch, type GlobalBucket, type RateDecision } from "./rate-limit";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveFilter, categoryFromTypes, ALL_PLACE_TYPES, isActivePlace } from "./categories";
@@ -72,6 +72,30 @@ async function rateLimit(userId: string, bucket: string, max: number, windowSeco
   const d = await checkRate(userId, bucket, max, windowSeconds);
   if (d === "limited") throw new Error(message);
   if (d === "unavailable") throw new Error(RATE_UNAVAILABLE_MSG);
+}
+
+/**
+ * App-wide Google budget (reserve_global_budget, service_role only). Ceilings live in the database table
+ * global_api_limits; only bucket/amount/partial are sent and never come from the client. Returns how many
+ * calls were granted; any failure grants 0.
+ */
+async function reserveGlobal(bucket: GlobalBucket, requested: number, allowPartial = false): Promise<number> {
+  if (requested <= 0) return 0;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabaseAdmin.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)(
+      "reserve_global_budget", { _bucket: bucket, _requested: requested, _allow_partial: allowPartial },
+    );
+    const d = globalDecision(data, error, requested);
+    if (d.status !== "granted") console.error(`[global-budget] ${d.status} bucket=${bucket} requested=${requested}`, error ?? data);
+    return d.granted;
+  } catch (e) {
+    console.error(`[global-budget] threw bucket=${bucket}`, e);
+    return 0;
+  }
+}
+async function requireGlobal(bucket: GlobalBucket) {
+  if ((await reserveGlobal(bucket, 1)) !== 1) throw new Error(GLOBAL_UNAVAILABLE_MSG);
 }
 
 /** Bounded photo URL cache: max 500 entries, 30-min validity, oldest evicted first. */
