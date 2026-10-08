@@ -4,8 +4,8 @@ Estas propostas foram registradas na conversa e não estão implementadas por es
 
 ## Livros
 
-- Editar registros, incluindo dados, notas, comentário e foto.
-- Excluir registros com limpeza segura da foto vinculada.
+- Editar registros, incluindo dados, notas, comentário e foto — preparado no PR de gerenciamento de livros; teste real e publicação pendentes.
+- Excluir registros com confirmação e limpeza da foto vinculada — preparado no mesmo PR; teste real e publicação pendentes.
 - Escolher entre “Só eu” e compartilhar com a comunidade.
 - Consultar opiniões sobre livros compartilhados para ajudar a decidir o que ler.
 - Definir o formato de interação com a comunidade antes de implementar; comentários, reações e médias ainda precisam de desenho e decisão.
