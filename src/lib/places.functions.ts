@@ -56,10 +56,17 @@ type GPlace = {
 };
 
 /** Atomic per-user limit (SQL advisory lock). Always fail-closed: only an explicit grant lets the call continue. */
+/** One shared load of the server-only admin client (also avoids parallel dynamic imports racing). */
+let adminPromise: Promise<typeof import("@/integrations/supabase/client.server")["supabaseAdmin"]> | null = null;
+function loadAdmin() {
+  adminPromise ??= import("@/integrations/supabase/client.server").then((m) => m.supabaseAdmin);
+  return adminPromise;
+}
+
 async function checkRate(userId: string, bucket: string, max: number, windowSeconds: number): Promise<RateDecision> {
 
   try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = await loadAdmin();
     const { data, error } = await supabaseAdmin.rpc("hit_rate_limit", { _user: userId, _bucket: bucket, _max: max, _window_seconds: windowSeconds });
     const d = rateDecision(data, error);
     if (d === "unavailable") console.error(`[rate-limit] check failed bucket=${bucket} user=${userId}`, error ?? data);
@@ -83,7 +90,7 @@ async function rateLimit(userId: string, bucket: string, max: number, windowSeco
 async function reserveGlobal(bucket: GlobalBucket, requested: number, allowPartial = false): Promise<number> {
   if (requested <= 0) return 0;
   try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const supabaseAdmin = await loadAdmin();
     const { data, error } = await (supabaseAdmin.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>)(
       "reserve_global_budget", { _bucket: bucket, _requested: requested, _allow_partial: allowPartial },
     );

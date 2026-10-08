@@ -21,15 +21,13 @@ vi.mock("@/integrations/supabase/auth-middleware", () => ({ requireSupabaseAuth:
 // Dispatches by RPC name so per-user and global limiters can be driven separately.
 const userRpc = vi.fn();
 const globalRpc = vi.fn();
-const rpc = vi.fn((name: string, args: Record<string, unknown>) => (console.log("DBGR", name, JSON.stringify(args)), 0) ||
+const rpc = vi.fn((name: string, args: Record<string, unknown>) =>
   name === "hit_rate_limit" ? userRpc(args) : name === "reserve_global_budget" ? globalRpc(args) : Promise.resolve({ data: null, error: null }));
 const upsert = vi.fn(async () => ({ error: null }));
 vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args), from: () => ({ upsert }) },
 }));
 
-// Warm the mocked module so concurrent dynamic imports in the handlers all resolve to the mock.
-await import("@/integrations/supabase/client.server");
 import { searchPlaces, getPlaceDetails, ensurePlace, postSituation } from "./places.functions";
 import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG } from "./rate-limit";
 import { resolvePlacePhotos } from "./places.functions";
