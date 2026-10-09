@@ -36,7 +36,7 @@ export function StallsPanel({ place, user, onRegister, notify }: { place: PlaceS
         <Button size="sm" onClick={() => onRegister(st)} className="shrink-0 rounded-full bg-secondary text-xs font-extrabold text-secondary-foreground hover:bg-secondary/90">Eu fui</Button>
       </div>; })}
       {stalls.isError && <ListError onRetry={() => void stalls.refetch()} />}
-      {stalls.data?.length === 0 && <p className="rounded-2xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Nenhuma barraquinha cadastrada ainda.</p>}
+      {stalls.data?.length === 0 && <p className="rounded-2xl border border-dashed border-muted-foreground/60 p-5 text-center text-sm text-muted-foreground">Nenhuma barraquinha cadastrada ainda.</p>}
     </div>
     {adding ? <div className="mt-4 space-y-3 rounded-2xl bg-card p-4 shadow-sm">
       <Field label="Nome da barraquinha" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Pastel da Dona Maria" />
