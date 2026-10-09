@@ -30,6 +30,7 @@ import { MAX_EXPERIENCE_PHOTOS, PHOTO_REJECTION_MESSAGE, photoRejection, selectE
 import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
 import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { getGuestChallengeToken } from "@/lib/guest-challenge.browser";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor } from "@/components/cevai/InstallPrompt";
@@ -443,7 +444,10 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
 function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, notify }: { placeId: string; user: User | null; center: LatLng; onBack: () => void; onRegister: (p: PlaceSummary, stall?: Stall | null) => void; onLogin: () => void; notify: (m: string) => void }) {
   const details = useServerFn(user ? getPlaceDetails : getGuestPlaceDetails);
   const queryClient = useQueryClient();
-  const place = useQuery({ queryKey: ["place", user ? "member" : "guest", placeId], queryFn: () => details({ data: { placeId } }), staleTime: 30 * 60 * 1000, retry: false });
+  const place = useQuery({ queryKey: ["place", user ? "member" : "guest", placeId], queryFn: async ({ signal }) => {
+    const turnstileToken = user ? undefined : await getGuestChallengeToken(signal);
+    return details({ data: { placeId, ...(turnstileToken ? { turnstileToken } : {}) } });
+  }, staleTime: 30 * 60 * 1000, retry: false });
   const experiences = useQuery({ queryKey: ["experiences", "place", placeId, user?.id], queryFn: () => loadExperiences({ placeId, ...(user ? { viewerId: user.id } : {}) }, queryClient), enabled: !!user,
     refetchInterval: (query) => query.state.data?.some((e) => e.sharedPhotoPaths?.length) ? 240_000 : false, refetchIntervalInBackground: false });
   const saved = useSaved(user);
@@ -755,3 +759,4 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
     </div>
   </div>;
 }
+

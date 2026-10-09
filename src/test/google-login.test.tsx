@@ -78,3 +78,5 @@ describe("Explorar first search waits for location", () => {
     expect(m.memberSearch.mock.calls.every((c) => c[0].data.lat === -16.7 && c[0].data.lng === -49.3)).toBe(true);
   });
 });
+
+vi.mock("@/lib/guest-challenge.browser", () => ({ getGuestChallengeToken: vi.fn(async () => "guest-proof") }));

@@ -352,12 +352,20 @@ export const getPlaceDetails = createServerFn({ method: "POST" })
 
 /** Public Google-sourced discovery only; private/community content and writes remain authenticated. */
 export const searchGuestPlaces = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => searchSchema.parse(data))
-  .handler(({ data }) => searchPlaceData(data, GUEST_RATE_ID, "guest_search", false));
+  .inputValidator((data: unknown) => searchSchema.extend({ turnstileToken: z.string().max(2048).optional() }).parse(data))
+  .handler(async ({ data }) => {
+    const { verifyGuestChallenge } = await import("./guest-challenge.server");
+    await verifyGuestChallenge(data.turnstileToken);
+    return searchPlaceData(data, GUEST_RATE_ID, "guest_search", false);
+  });
 
 export const getGuestPlaceDetails = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => detailSchema.parse(data))
-  .handler(({ data }) => placeDetailData(data.placeId, GUEST_RATE_ID, "guest_details", false));
+  .inputValidator((data: unknown) => detailSchema.extend({ turnstileToken: z.string().max(2048).optional() }).parse(data))
+  .handler(async ({ data }) => {
+    const { verifyGuestChallenge } = await import("./guest-challenge.server");
+    await verifyGuestChallenge(data.turnstileToken);
+    return placeDetailData(data.placeId, GUEST_RATE_ID, "guest_details", false);
+  });
 
 /** Turns stored Google photo names into fresh display URLs (cover size). Missing/failed ones are simply omitted. */
 export const resolvePlacePhotos = createServerFn({ method: "POST" })
@@ -469,3 +477,4 @@ export const postSituation = createServerFn({ method: "POST" })
     if (result === "hourly") throw new Error(RATE_MSG);
     return { ok: true };
   });
+
