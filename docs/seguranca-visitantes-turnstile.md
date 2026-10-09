@@ -1,0 +1,33 @@
+# Proteção das consultas pagas de visitantes
+
+Buscas e detalhes continuam disponíveis sem conta. Antes de cada chamada pública, o navegador obtém um token Turnstile novo e o servidor o valida com a Cloudflare. A validação exige sucesso explícito, ação `guest_places`, domínio permitido e token recente. Tokens não são guardados nem reutilizados: o provedor recusa replay. A validação acontece antes das cotas e do Google; fotos embutidas nas respostas ficam protegidas pela mesma entrada. As cotas de visitantes e o teto global continuam obrigatórios. Pessoas logadas usam os caminhos autenticados existentes.
+
+## Configuração obrigatória ANTES de integrar/publicar
+
+1. Criar um widget **Managed** no Cloudflare Turnstile. Cadastrar os domínios exatos do site publicado e da prévia (hostname, sem protocolo, porta ou caminho). Não permitir qualquer domínio nem usar chaves de teste em produção.
+2. Definir `VITE_TURNSTILE_SITE_KEY` no ambiente de build do Lovable. Esta é a chave pública do widget; exige novo build.
+3. Definir `TURNSTILE_SECRET_KEY` nos segredos do servidor. Nunca usar prefixo `VITE_`, colocar no repositório ou enviar em conversa.
+4. Definir `TURNSTILE_ALLOWED_HOSTNAMES` no servidor, com os mesmos hostnames exatos separados por vírgula. A aplicação não confia no Host enviado pela requisição para escolher esta lista.
+5. Se houver CSP, permitir `https://challenges.cloudflare.com` em `script-src` e `frame-src`, seguindo a documentação oficial. O servidor precisa alcançar o Siteverify por HTTPS. Adicionar o uso do serviço à informação de privacidade do app, conforme as exigências aplicáveis do provedor.
+6. Testar a branch em ambiente com essas configurações antes de integrar. Não ligar esta versão à main sem configuração: ela bloqueia visitantes em caso de ausência, indisponibilidade ou verificação inválida. Não existe modo de liberar consultas sem validação.
+
+O widget usa `appearance: interaction-only`; aparece quando a Cloudflare pede interação, sem mudar as telas do app. Cada consulta usa seu próprio widget/token; chamadas paralelas não compartilham um token. Cancelamento, expiração, falha ou espera de dois minutos removem o widget e impedem a chamada. A chave secreta só é lida no módulo `.server.ts`.
+
+## Validação antes da publicação
+
+- Sem login: explorar lista, buscar texto, navegar no mapa e abrir detalhes/fotos. A validação bem-sucedida deve preservar resultados e navegação.
+- Abrir um link de lugar compartilhado sem login: detalhes passam pela verificação. Favoritos e registro de experiências continuam pedindo conta.
+- Chamar diretamente os dois endpoints sem token, com token falso/expirado/reutilizado ou originado em domínio não permitido: nenhum RPC de cota/reserva e nenhuma chamada ao Google.
+- Pessoa logada: busca, detalhes e registro continuam sem widget de visitante.
+- Falha do provedor: mensagem de verificação, sem liberar consulta paga. Repetir após recuperação deve obter novo token.
+- Cache fresco do React Query: reutilização de resultados não chama o endpoint nem gera desafio adicional. Fotos já em cache continuam sem consumo adicional de fotos.
+- Rodar `npm test`, `npx tsc --noEmit` e `npm run build`. Inspecionar os arquivos públicos gerados para garantir que não contêm a chave secreta nem a implementação do Siteverify.
+- Depois de publicação validada, executar novo deep scan e revisar os detalhes: o endpoint continua público por decisão de produto. Não registrar automaticamente como ignorado e não prometer que a etiqueta desaparecerá.
+
+## Limites da proteção
+
+Turnstile reduz abuso automatizado; não torna visitante uma conta nem elimina todos os robôs. Visitantes legítimos ainda consomem a cota compartilhada, limitada pelos tetos existentes. Ataques à disponibilidade do servidor precisam de controles na hospedagem; esta mudança protege a saída paga ao Google. Testes locais simulam Cloudflare, banco e Google; validação real do widget/domínios ainda é necessária.
+
+Nenhuma migração SQL ou alteração de permissões é necessária. Para reverter o código, restaurar a versão anterior por novo commit; isso também retira esta proteção adicional, mantendo as cotas anteriores.
+
+Referências: [validação no servidor](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/), [configuração do widget](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/widget-configurations/), [CSP](https://developers.cloudflare.com/turnstile/reference/content-security-policy/).
