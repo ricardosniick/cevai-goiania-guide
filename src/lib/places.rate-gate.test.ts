@@ -17,6 +17,8 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 
 vi.mock("@/integrations/supabase/auth-middleware", () => ({ requireSupabaseAuth: {} }));
+const challenge = vi.hoisted(() => vi.fn());
+vi.mock("./guest-challenge.server", () => ({ verifyGuestChallenge: challenge }));
 
 // Dispatches by RPC name so per-user and global limiters can be driven separately.
 const userRpc = vi.fn();
@@ -61,6 +63,8 @@ const blocked: Array<{ label: string; setup: () => void; message: string }> = [
 ];
 
 beforeEach(() => {
+  challenge.mockReset();
+  challenge.mockResolvedValue(undefined);
   rpc.mockClear();
   userRpc.mockReset();
   globalRpc.mockReset();
@@ -76,6 +80,25 @@ beforeEach(() => {
   vi.stubEnv("GOOGLE_MAPS_API_KEY", "test-maps-key");
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "log").mockImplementation(() => {});
+});
+
+describe("guest challenge before quotas and Google", () => {
+  it.each([
+    { fn: searchGuestPlaces, input: { query: "pizza" } },
+    { fn: getGuestPlaceDetails, input: { placeId: PLACE_ID } },
+  ])("rejects an invalid proof without spending any quota", async ({ fn, input }) => {
+    challenge.mockRejectedValue(new Error("challenge rejected"));
+    await expect((fn as unknown as Call)({ ...input, turnstileToken: "invalid" }, undefined)).rejects.toThrow("challenge rejected");
+    expect(challenge).toHaveBeenCalledWith("invalid");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+  it("signed-in discovery does not require a guest challenge", async () => {
+    await (searchPlaces as unknown as Call)({ query: "pizza" }, context);
+    expect(challenge).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalled();
+  });
 });
 
 afterEach(() => {

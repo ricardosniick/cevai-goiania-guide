@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(), rpc: vi.fn(), pendingLink: vi.fn(),
 }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
+vi.mock("@/lib/guest-challenge.browser", () => ({ getGuestChallengeToken: vi.fn(async () => "guest-proof") }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   auth: {
     getSession: async () => ({ data: { session: null } }),
@@ -78,7 +79,7 @@ describe("visitor exploration", () => {
   it("shows real discovery results and Google details without a session or private queries", async () => {
     await openDetails();
     expect(mocks.search).toHaveBeenCalled();
-    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id } });
+    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id, turnstileToken: "guest-proof" } });
     expect(mocks.memberSearch).not.toHaveBeenCalled();
     expect(mocks.memberDetails).not.toHaveBeenCalled();
     expect(mocks.from).not.toHaveBeenCalled();
@@ -109,7 +110,7 @@ describe("visitor exploration", () => {
     mocks.pendingLink.mockReturnValueOnce(place.id);
     mountApp();
     await screen.findByText("Avaliação do Google");
-    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id } });
+    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id, turnstileToken: "guest-proof" } });
     expect(screen.queryByText("Esqueci minha senha")).not.toBeInTheDocument();
     expect(mocks.from).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();
@@ -120,15 +121,16 @@ describe("visitor exploration", () => {
     mocks.search.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Finalizar movimento do mapa" }));
     await waitFor(() => expect(mocks.search).toHaveBeenCalledWith({ data: {
-      category: undefined, query: undefined, lat: -16.68, lng: -49.25, radius: 1000, withPhotos: false, rank: "distance",
+      category: undefined, query: undefined, lat: -16.68, lng: -49.25, radius: 1000, withPhotos: false, rank: "distance", turnstileToken: "guest-proof",
     } }));
     fireEvent.click(await screen.findByRole("button", { name: `Selecionar marcador ${place.name}` }));
     fireEvent.click(screen.getByRole("button", { name: "Ver lugar" }));
     await screen.findByText("Avaliação do Google");
-    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id } });
+    expect(mocks.details).toHaveBeenCalledWith({ data: { placeId: place.id, turnstileToken: "guest-proof" } });
     expect(mocks.memberSearch).not.toHaveBeenCalled();
     expect(mocks.from).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
 });
+
