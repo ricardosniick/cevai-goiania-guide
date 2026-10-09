@@ -75,25 +75,13 @@ beforeEach(() => {
   vi.stubEnv("LOVABLE_API_KEY", "test-key");
   vi.stubEnv("GOOGLE_MAPS_API_KEY", "test-maps-key");
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-});
-
-describe("Google refresh after coordinate cleanup", () => {
-  const googlePlace = { id: PLACE_ID, displayName: { text: "Bar teste" }, formattedAddress: "Rua teste", primaryType: "bar", types: ["bar"], location: { latitude: -16.68, longitude: -49.25 } };
-  it.each(handlers.filter(h => !h.name.includes("Guest")))("$name writes both coordinates and a fresh timestamp together", async ({ fn, input, name }) => {
-    fetchMock.mockImplementation(async () => new Response(JSON.stringify(name === "searchPlaces" ? { places: [googlePlace] } : googlePlace), { status: 200 }));
-    await fn(name === "postSituation" ? { ...(input as object), situations: ["🙂 Movimento tranquilo"] } : input, context);
-    expect(upsert).toHaveBeenCalledTimes(1);
-    const payload = upsert.mock.calls[0]![0];
-    const row = Array.isArray(payload) ? payload[0] : payload;
-    expect(row).toMatchObject({ google_place_id: PLACE_ID, lat: -16.68, lng: -49.25 });
-    expect(Number.isFinite(Date.parse((row as { coords_fetched_at: string }).coords_fetched_at))).toBe(true);
-  });
 });
 
 describe.each(handlers)("$name: limite antes do Google", ({ fn, input, bucket }) => {
@@ -279,5 +267,59 @@ describe("visitor budget isolation", () => {
     expect(out.photos).toHaveLength(1);
     expect(userRpc.mock.calls.some(c => c[0]._bucket.startsWith("guest_photo_"))).toBe(false);
     expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(0);
+  });
+});
+
+
+describe("map search: no photos, nearest first, timeouts", () => {
+  const places = [1, 2].map((i) => ({ id: `ChIJmapPlace${i}xxxxxx`, displayName: { text: `Restaurante ${i}` }, primaryType: "restaurant", types: ["restaurant"], location: { latitude: -16.6, longitude: -49.2 }, photos: [photo(400 + i)] }));
+  it("withPhotos false skips photo reservation and calls, keeping photoName", async () => {
+    gatewayReply({ places });
+    const out = (await (searchPlaces as unknown as Call)({ category: "Comer", lat: -16.68, lng: -49.25, withPhotos: false, rank: "distance" }, context)) as Array<{ photoUrl: string | null; photoName: string | null }>;
+    expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(0);
+    expect(globalRpc.mock.calls.some((c) => (c[0] as { _bucket: string })._bucket === "photo")).toBe(false);
+    expect(out.map((p) => p.photoName)).toEqual([photo(401).name, photo(402).name]);
+    expect(out.every((p) => p.photoUrl === null)).toBe(true);
+  });
+  it("rank distance sends DISTANCE and keeps includedTypes; default stays POPULARITY", async () => {
+    gatewayReply({ places: [] });
+    await (searchPlaces as unknown as Call)({ category: "Comer", lat: -16.68, lng: -49.25, rank: "distance" }, context);
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.rankPreference).toBe("DISTANCE");
+    expect(body.includedTypes.length).toBeGreaterThan(0);
+    fetchMock.mockClear();
+    await (searchPlaces as unknown as Call)({ category: "Comer", lat: -16.68, lng: -49.25 }, context);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).rankPreference).toBe("POPULARITY");
+  });
+  it("default search still fetches photos", async () => {
+    gatewayReply({ places });
+    await (searchPlaces as unknown as Call)({ category: "Comer", lat: -16.68, lng: -49.25 }, context);
+    expect(fetchMock.mock.calls.filter(isPhotoCall).length).toBeGreaterThan(0);
+  });
+  it("every Google request carries an abort signal; a photo timeout yields null without failing the search", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/media?")) throw new DOMException("timeout", "TimeoutError");
+      return new Response(JSON.stringify({ places: places.map((p, i) => ({ ...p, photos: [photo(500 + i)] })) }));
+    });
+    const out = (await (searchPlaces as unknown as Call)({ query: "pizza", lat: -16.68, lng: -49.25 }, context)) as Array<{ photoUrl: string | null }>;
+    expect(out).toHaveLength(2);
+    expect(out.every((p) => p.photoUrl === null)).toBe(true);
+    for (const c of fetchMock.mock.calls) expect((c[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+  });
+  it("rejects an unknown rank value", () => {
+    expect(() => (searchPlaces as unknown as Call)({ rank: "random" }, context)).toThrow();
+  });
+});
+
+describe("Google refresh after coordinate cleanup", () => {
+  const googlePlace = { id: PLACE_ID, displayName: { text: "Bar teste" }, formattedAddress: "Rua teste", primaryType: "bar", types: ["bar"], location: { latitude: -16.68, longitude: -49.25 } };
+  it.each(handlers.filter(h => !h.name.includes("Guest")))("$name writes both coordinates and a fresh timestamp together", async ({ fn, input, name }) => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(name === "searchPlaces" ? { places: [googlePlace] } : googlePlace), { status: 200 }));
+    await fn(name === "postSituation" ? { ...(input as object), situations: ["🙂 Movimento tranquilo"] } : input, context);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const payload = upsert.mock.calls[0]![0];
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    expect(row).toMatchObject({ google_place_id: PLACE_ID, lat: -16.68, lng: -49.25 });
+    expect(Number.isFinite(Date.parse((row as { coords_fetched_at: string }).coords_fetched_at))).toBe(true);
   });
 });

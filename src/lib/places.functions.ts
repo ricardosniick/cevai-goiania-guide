@@ -144,8 +144,11 @@ function headers(fieldMask?: string) {
   return h;
 }
 
-async function gateway<T>(path: string, init: RequestInit): Promise<T> {
-  const res = await fetch(`${GATEWAY_URL}${path}`, init);
+export const GATEWAY_TIMEOUT_MS = 8000;
+export const PHOTO_TIMEOUT_MS = 4000;
+
+async function gateway<T>(path: string, init: RequestInit, timeoutMs = GATEWAY_TIMEOUT_MS): Promise<T> {
+  const res = await fetch(`${GATEWAY_URL}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) {
     const body = await res.text();
     console.error(`Google Maps request failed [${res.status}]: ${body}`);
@@ -164,7 +167,7 @@ async function fetchPhotoUrl(key: string): Promise<string | null> {
   const width = Number(key.slice(i + 1));
   if (!PHOTO_NAME_RE.test(name) || !Number.isInteger(width)) return null;
   try {
-    const data = await gateway<{ photoUri?: string }>(`/places/v1/${name}/media?maxWidthPx=${width}&skipHttpRedirect=true`, { headers: headers() });
+    const data = await gateway<{ photoUri?: string }>(`/places/v1/${name}/media?maxWidthPx=${width}&skipHttpRedirect=true`, { headers: headers() }, PHOTO_TIMEOUT_MS);
     if (data.photoUri) cacheSet(key, data.photoUri);
     return data.photoUri ?? null;
   } catch {
@@ -220,6 +223,8 @@ const searchSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
   radius: z.number().min(300).max(25000).optional(),
+  withPhotos: z.boolean().optional(),
+  rank: z.enum(["distance", "popularity"]).optional(),
 });
 
 // Visitors share server-owned buckets: no client identity, anonymous Auth account, or RLS grant.
@@ -238,6 +243,8 @@ const detailSchema = z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300
 
 async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: string, bucket: string, persist: boolean): Promise<PlaceSummary[]> {
     await rateLimit(userId, bucket, 30, 60);
+    const t0 = Date.now(); const ms: Record<string, number> = {}; let t = t0;
+    const lap = (k: string) => { const n = Date.now(); ms[k] = n - t; t = n; };
     const center = { latitude: data.lat ?? GOIANIA.lat, longitude: data.lng ?? GOIANIA.lng };
     const filter = resolveFilter(data.category);
     let result: { places?: GPlace[] };
@@ -266,18 +273,24 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
         body: JSON.stringify({
           includedTypes: filter.types?.length ? filter.types.slice(0, 50) : ALL_PLACE_TYPES,
           maxResultCount: 20,
-          rankPreference: "POPULARITY",
+          rankPreference: data.rank === "distance" ? "DISTANCE" : "POPULARITY",
           languageCode: "pt-BR",
           regionCode: "BR",
           locationRestriction: { circle: { center, radius: data.radius ?? 6000 } },
         }),
       });
     }
+    lap("google");
     const forced = !data.query && filter.label ? filter.label : undefined;
     // Filtered searches (Destaques, categories, text) keep only places of active categories; dropped places get no photo calls and are not stored.
     const raw = RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace(p.primaryType, p.types ?? [], p.displayName?.text ?? "", forced)) : (result.places ?? []);
     const kept = raw.slice(0, 20);
-    const urls = await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)), persist ? undefined : guestPhotoLimit);
+    const all = result.places ?? [];
+    const dropped = all.filter((p) => !raw.includes(p));
+    lap("filtro");
+    const withPhotos = data.withPhotos !== false;
+    const urls = !withPhotos ? {} : await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)), persist ? undefined : guestPhotoLimit);
+    if (withPhotos) lap("fotos");
     const places = kept.map((p) => toSummary(p, urls, 600, forced));
     if (persist && places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
@@ -286,7 +299,11 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
         places.map((p) => ({ google_place_id: p.id, name: p.name, address: p.address, category: p.category, lat: p.lat, lng: p.lng, photo_name: p.photoName, updated_at: new Date().toISOString(), coords_fetched_at: new Date().toISOString() })),
         { onConflict: "google_place_id" },
       );
+      lap("banco");
     }
+    ms["total"] = Date.now() - t0;
+    console.log("[searchPlaces]", JSON.stringify({ category: data.category ?? null, query: data.query ?? null, rank: data.rank ?? "popularity", withPhotos, radius: data.radius ?? null, ms, google: all.length, descartados: dropped.length, mantidos: kept.length }));
+    if (dropped.length) console.log("[searchPlaces] descartados", JSON.stringify(dropped.map((p) => ({ nome: p.displayName?.text ?? "", primaryType: p.primaryType ?? null, types: p.types ?? [] }))));
     return places;
 }
 

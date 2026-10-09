@@ -20,7 +20,7 @@ vi.mock("@/lib/places.functions", () => ({
   GOIANIA: { lat: -16.6869, lng: -49.2648 },
   searchGuestPlaces: mocks.search, getGuestPlaceDetails: mocks.details,
   searchPlaces: mocks.memberSearch, getPlaceDetails: mocks.memberDetails,
-  ensurePlace: vi.fn(), postSituation: vi.fn(),
+  ensurePlace: vi.fn(), postSituation: vi.fn(), resolvePlacePhotos: vi.fn(),
 }));
 vi.mock("@/components/cevai/InstallPrompt", () => ({
   InstallPrompt: () => null, captureSharedLink: () => false, takePendingLink: mocks.pendingLink,
@@ -120,7 +120,7 @@ describe("visitor exploration", () => {
     mocks.search.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Finalizar movimento do mapa" }));
     await waitFor(() => expect(mocks.search).toHaveBeenCalledWith({ data: {
-      category: undefined, query: undefined, lat: -16.68, lng: -49.25, radius: 1000,
+      category: undefined, query: undefined, lat: -16.68, lng: -49.25, radius: 1000, withPhotos: false, rank: "distance",
     } }));
     fireEvent.click(await screen.findByRole("button", { name: `Selecionar marcador ${place.name}` }));
     fireEvent.click(screen.getByRole("button", { name: "Ver lugar" }));
