@@ -1,11 +1,14 @@
 import { useState } from "react";
+import type React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@supabase/supabase-js";
-import { BookOpen, Camera, Star, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Camera, Image as ImageIcon, Star, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { saveBook } from "@/lib/save-book";
+import { compressImage } from "@/lib/compress-image";
+import { PHOTO_REJECTION_MESSAGE, photoRejection } from "@/lib/experience-photo-selection";
 import { updateBook, deleteBook } from "@/lib/manage-book";
 import type { Tables } from "@/integrations/supabase/types";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
@@ -32,6 +35,12 @@ export function BooksPanel({ user, notify }: { user: User; notify: (m: string) =
   const reset = () => { setOpen(false); setEditing(null); setTitle(""); setAuthor(""); setRating(0); setComment(""); setFile(null); setRemovePhoto(false); };
   const edit = (book: Tables<"books"> & { photo: string | null }) => {
     setEditing(book); setTitle(book.title); setAuthor(book.author ?? ""); setStatus(book.status as BookStatus); setRating(book.rating ?? 0); setComment(book.comment ?? ""); setRec(book.would_recommend ?? true); setFile(null); setRemovePhoto(false); setOpen(true);
+  };
+  const pickBookPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null; e.target.value = "";
+    if (!f) return;
+    const bad = photoRejection([f]); if (bad) { notify(PHOTO_REJECTION_MESSAGE[bad]); return; }
+    setFile(await compressImage(f));
   };
   const save = async () => {
     if (saving || deletingBusy || !title.trim()) return;
@@ -68,7 +77,7 @@ export function BooksPanel({ user, notify }: { user: User; notify: (m: string) =
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} rows={2} placeholder="Minha experiência com o livro" className="w-full resize-none rounded-xl border border-input bg-background p-3 text-sm outline-none" />
       {editing?.photo_path && !removePhoto && <div className="flex items-center gap-3">{editing.photo && <img src={editing.photo} alt="Foto atual do livro" className="h-20 w-14 rounded-lg object-cover" />}<Button variant="outline" disabled={saving} onClick={() => { setRemovePhoto(true); setFile(null); }} className="rounded-full">Remover foto atual</Button></div>}
       {editing?.photo_path && removePhoto && <Button variant="ghost" disabled={saving} onClick={() => setRemovePhoto(false)}>Manter foto atual</Button>}
-      <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground"><Camera size={16} />{file ? file.name : "Adicionar foto (opcional)"}<input type="file" accept="image/*" className="sr-only" disabled={saving} onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
+      <div><p className="text-xs font-bold text-muted-foreground">{file ? file.name : "Adicionar foto (opcional)"}</p><div className="mt-1 flex gap-4"><label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-muted-foreground"><Camera size={16} />Câmera<input type="file" accept="image/*" capture="environment" className="sr-only" disabled={saving} onChange={pickBookPhoto} /></label><label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-muted-foreground"><ImageIcon size={16} />Galeria<input type="file" accept="image/*" className="sr-only" disabled={saving} onChange={pickBookPhoto} /></label></div></div>
       {status === "terminei" && <button onClick={() => setRec((v) => !v)} className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${rec ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{rec ? "❤️ Recomendo" : "Não recomendo"}</button>}
       <div className="flex gap-2"><Button variant="outline" disabled={saving} onClick={() => { if (editing) reset(); else setOpen(false); }} className="flex-1 rounded-full">Cancelar</Button><Button disabled={!title.trim() || saving || deletingBusy} onClick={() => void save()} className="flex-1 rounded-full bg-secondary font-extrabold text-secondary-foreground hover:bg-secondary/90">{saving ? "Salvando…" : editing ? "Atualizar livro" : "Salvar livro"}</Button></div>
     </div> : <Button onClick={() => setOpen(true)} variant="outline" className="h-11 w-full rounded-full border-dashed font-extrabold"><BookOpen size={16} />Registrar livro</Button>}

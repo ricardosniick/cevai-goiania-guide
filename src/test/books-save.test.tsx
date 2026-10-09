@@ -20,7 +20,7 @@ async function openForm() {
   fireEvent.change(screen.getByLabelText("Autor (opcional)"), { target: { value: "Autora" } });
   fireEvent.click(screen.getByRole("button", { name: "4 estrelas" }));
   fireEvent.change(screen.getByPlaceholderText("Minha experiência com o livro"), { target: { value: "Gostei" } });
-  fireEvent.change(screen.getByLabelText("Adicionar foto (opcional)"), { target: { files: [new File(["image"], "book.jpg", { type: "image/jpeg" })] } });
+  fireEvent.change(screen.getByLabelText("Galeria"), { target: { files: [new File(["image"], "book.jpg", { type: "image/jpeg" })] } });
   fireEvent.click(screen.getByRole("button", { name: "Salvar livro" }));
   return notify;
 }

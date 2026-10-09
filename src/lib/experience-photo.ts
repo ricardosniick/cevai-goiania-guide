@@ -1,7 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/compress-image";
 
 /** Compensate only after confirming that a successfully uploaded file has no link. */
-export async function saveExperiencePhoto(userId: string, experienceId: string, file: File): Promise<boolean> {
+export async function saveExperiencePhoto(userId: string, experienceId: string, original: File): Promise<boolean> {
+  const file = await compressImage(original);
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   const path = `${userId}/${experienceId}/${crypto.randomUUID()}.${ext}`;
   const bucket = supabase.storage.from("experience-photos");
