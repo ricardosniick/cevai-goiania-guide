@@ -6,7 +6,7 @@ export async function saveExperiencePhoto(userId: string, experienceId: string, 
   const path = `${userId}/${experienceId}/${crypto.randomUUID()}.${ext}`;
   const bucket = supabase.storage.from("experience-photos");
   try {
-    const upload = await bucket.upload(path, file, { contentType: file.type });
+    const upload = await bucket.upload(path, file, { contentType: file.type, cacheControl: "60" });
     if (upload.error) { console.error("[photo] upload failed", upload.error); return false; }
   } catch (error) {
     console.error("[photo] upload outcome unknown", error);

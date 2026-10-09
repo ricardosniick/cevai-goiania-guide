@@ -20,7 +20,7 @@ import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, Err
 import { StallsPanel } from "@/components/cevai/StallsPanel";
 import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
-import { loadExperiences, useSaved } from "@/hooks/useExperiences";
+import { loadExperiences, useSaved, SHARED_PHOTO_REFRESH_MS } from "@/hooks/useExperiences";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { saveExperiencePhoto } from "@/lib/experience-photo";
 import { deleteExperience } from "@/lib/delete-experience";
@@ -416,7 +416,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
   const details = useServerFn(user ? getPlaceDetails : getGuestPlaceDetails);
   const queryClient = useQueryClient();
   const place = useQuery({ queryKey: ["place", user ? "member" : "guest", placeId], queryFn: () => details({ data: { placeId } }), staleTime: 30 * 60 * 1000, retry: false });
-  const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }, queryClient), enabled: !!user });
+  const experiences = useQuery({ queryKey: ["experiences", "place", placeId, user?.id], queryFn: () => loadExperiences({ placeId, ...(user ? { viewerId: user.id } : {}) }, queryClient), enabled: !!user, refetchInterval: (query) => query.state.data?.some(e => e.user_id !== user?.id && e.photoItems.length > 0) ? SHARED_PHOTO_REFRESH_MS : false, refetchIntervalInBackground: false });
   const saved = useSaved(user);
   const stats = usePlaceStats(user, [placeId]);
   const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos" | "Barraquinhas">("Sobre");
@@ -724,4 +724,3 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
     </div>
   </div>;
 }
-

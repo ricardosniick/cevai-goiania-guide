@@ -4,19 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolvePlacePhotos } from "@/lib/places.functions";
 import type { Experience } from "@/components/cevai/types";
 
-export async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }, qc: QueryClient): Promise<Experience[]> {
+export const SHARED_PHOTO_TTL_SECONDS = 300;
+export const SHARED_PHOTO_REFRESH_MS = 240_000;
+
+export async function loadExperiences(filter: { userId?: string; viewerId?: string; placeId?: string; stallId?: string }, qc: QueryClient): Promise<Experience[]> {
   let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url, photo_name), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
   if (filter.userId) q = q.eq("user_id", filter.userId);
   if (filter.placeId) q = q.eq("place_id", filter.placeId);
   if (filter.stallId) q = q.eq("stall_id", filter.stallId);
   const { data, error } = await q;
   if (error) throw error;
-  const paths = (data ?? []).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path));
+  const paths = [...new Set((data ?? []).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path)))];
   const urls: Record<string, string> = {};
-  if (paths.length) {
-    const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
-    signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
-  }
+  // viewerId chooses expiry only; Storage RLS remains the authority for access.
+  const viewerId = filter.viewerId ?? filter.userId;
+  const own = paths.filter(p => !!viewerId && p.split("/")[0] === viewerId);
+  const shared = paths.filter(p => !own.includes(p));
+  await Promise.all([{ paths: own, ttl: 3600 }, { paths: shared, ttl: SHARED_PHOTO_TTL_SECONDS }].map(async batch => {
+    if (!batch.paths.length) return;
+    try {
+      const { data: signed, error } = await supabase.storage.from("experience-photos").createSignedUrls(batch.paths, batch.ttl);
+      if (error) return;
+      signed?.forEach(s => { if (s.path && s.signedUrl && batch.paths.includes(s.path)) urls[s.path] = s.signedUrl; });
+    } catch { /* No reuse of an old shared link when renewal is denied or fails. */ }
+  }));
   return (await withFreshPhotos(data ?? [], qc)).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
 }
 

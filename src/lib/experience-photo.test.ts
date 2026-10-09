@@ -18,6 +18,7 @@ describe("experience photo reconciliation", () => {
   it("links the uploaded file and keeps it", async () => {
     expect(await saveExperiencePhoto("user", "experience", file)).toBe(true);
     const path = m.upload.mock.calls[0]?.[0];
+    expect(m.upload).toHaveBeenCalledWith(path, file, { contentType: "image/jpeg", cacheControl: "60" });
     expect(m.insert).toHaveBeenCalledWith({ user_id: "user", experience_id: "experience", storage_path: path });
     expect(m.remove).not.toHaveBeenCalled();
   });
