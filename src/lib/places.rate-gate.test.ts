@@ -75,6 +75,7 @@ beforeEach(() => {
   vi.stubEnv("LOVABLE_API_KEY", "test-key");
   vi.stubEnv("GOOGLE_MAPS_API_KEY", "test-maps-key");
   vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -298,7 +299,7 @@ describe("map search: no photos, nearest first, timeouts", () => {
   it("every Google request carries an abort signal; a photo timeout yields null without failing the search", async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (String(url).includes("/media?")) throw new DOMException("timeout", "TimeoutError");
-      return new Response(JSON.stringify({ places }));
+      return new Response(JSON.stringify({ places: places.map((p, i) => ({ ...p, photos: [photo(500 + i)] })) }));
     });
     const out = (await (searchPlaces as unknown as Call)({ query: "pizza", lat: -16.68, lng: -49.25 }, context)) as Array<{ photoUrl: string | null }>;
     expect(out).toHaveLength(2);
