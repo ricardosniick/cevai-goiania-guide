@@ -1,5 +1,11 @@
 # Roadmap
 
+## Acabamento visual
+- [ ] Uniformizar resposta ao toque e indicador da navegação, preservando o botão central.
+- [ ] Suavizar entradas de listas, fotos e carregamento com redução de movimento.
+- [ ] Ajustar espaçamento, sombras e telas vazias com ações conectadas.
+- [ ] Executar testes e conferir a prévia; verificar o resultado automático da compilação.
+
 ## Nome do app e emails de autenticação
 - [x] Usar “Cê vai” no logo em texto, títulos, metadados, compartilhamento, nome de instalação e README.
 - [ ] Nome do projeto no editor: alterar manualmente nas configurações do projeto; não há ação de renomeação disponível nesta sessão.
