@@ -115,7 +115,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
           },
         });
       }
-      clusterer.current.addMarkers(pins.current);
+      clusterer.current?.addMarkers(pins.current);
     }
     if (!fit) return;
     if (markers.length > 1 && !selectedId) {
