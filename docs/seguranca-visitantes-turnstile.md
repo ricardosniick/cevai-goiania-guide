@@ -5,7 +5,7 @@ Buscas e detalhes continuam disponíveis sem conta. Antes de cada chamada públi
 ## Configuração obrigatória ANTES de integrar/publicar
 
 1. Criar um widget **Managed** no Cloudflare Turnstile. Cadastrar os domínios exatos do site publicado e da prévia (hostname, sem protocolo, porta ou caminho). Não permitir qualquer domínio nem usar chaves de teste em produção.
-2. Definir `VITE_TURNSTILE_SITE_KEY` no ambiente de build do Lovable. Esta é a chave pública do widget; exige novo build.
+2. A Site Key pública fornecida pelo dono está versionada como padrão em `guest-challenge.browser.ts`, garantindo sua presença no build mesmo sem `.env.local`. Para usar outro widget, `VITE_TURNSTILE_SITE_KEY` no ambiente de build tem prioridade; exige novo build. Somente a chave pública pode ficar no código.
 3. Definir `TURNSTILE_SECRET_KEY` nos segredos do servidor. Nunca usar prefixo `VITE_`, colocar no repositório ou enviar em conversa.
 4. Definir `TURNSTILE_ALLOWED_HOSTNAMES` no servidor, com os mesmos hostnames exatos separados por vírgula. A aplicação não confia no Host enviado pela requisição para escolher esta lista.
 5. Se houver CSP, permitir `https://challenges.cloudflare.com` em `script-src` e `frame-src`, seguindo a documentação oficial. O servidor precisa alcançar o Siteverify por HTTPS. Adicionar o uso do serviço à informação de privacidade do app, conforme as exigências aplicáveis do provedor.

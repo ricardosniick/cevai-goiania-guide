@@ -25,9 +25,16 @@ function loadWidget(): Promise<Turnstile> {
   return loading;
 }
 
+/** Public site key only. The private key must stay in the server's secrets. */
+export const DEFAULT_TURNSTILE_SITE_KEY = "0x4AAAAAAFST2lM6mrSDqNSA";
+
+export function resolveTurnstileSiteKey(envValue: unknown): string {
+  return typeof envValue === "string" && envValue.trim() ? envValue.trim() : DEFAULT_TURNSTILE_SITE_KEY;
+}
+
 /** A separate widget/token for each request, including concurrent requests. Never reuse a token. */
 export async function getGuestChallengeToken(signal?: AbortSignal): Promise<string> {
-  const sitekey = import.meta.env["VITE_TURNSTILE_SITE_KEY"];
+  const sitekey = resolveTurnstileSiteKey(import.meta.env["VITE_TURNSTILE_SITE_KEY"]);
   if (!sitekey || typeof window === "undefined" || signal?.aborted) throw new Error(GUEST_CHALLENGE_MSG);
   const api = await loadWidget();
   if (signal?.aborted) throw new Error(GUEST_CHALLENGE_MSG);

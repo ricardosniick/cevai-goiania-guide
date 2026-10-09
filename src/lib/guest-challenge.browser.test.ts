@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getGuestChallengeToken } from "./guest-challenge.browser";
+import { DEFAULT_TURNSTILE_SITE_KEY, getGuestChallengeToken, resolveTurnstileSiteKey } from "./guest-challenge.browser";
 import { GUEST_CHALLENGE_MSG } from "./guest-challenge";
 type Options = Parameters<NonNullable<Window["turnstile"]>["render"]>[1];
 let callbacks: Options[];
@@ -34,10 +34,14 @@ describe("guest challenge client", () => {
     await Promise.resolve(); controller.abort(); callbacks[0]!.callback("late-token"); await rejected;
     expect(remove).toHaveBeenCalledTimes(1);
   });
-  it("missing site key blocks rather than skipping verification", async () => {
+  it("missing env uses the public default and still requires a challenge", async () => {
     vi.stubEnv("VITE_TURNSTILE_SITE_KEY", "");
-    await expect(getGuestChallengeToken()).rejects.toThrow(GUEST_CHALLENGE_MSG);
-    expect(callbacks).toHaveLength(0);
+    const token = getGuestChallengeToken();
+    await Promise.resolve();
+    expect(callbacks).toHaveLength(1);
+    expect(callbacks[0]!.sitekey).toBe(DEFAULT_TURNSTILE_SITE_KEY);
+    callbacks[0]!.callback("token-default");
+    expect(await token).toBe("token-default");
   });
   it("provider script failure cleans up and permits a later attempt", async () => {
     delete window.turnstile;
@@ -63,5 +67,15 @@ describe("guest challenge client", () => {
     await Promise.resolve(); await vi.advanceTimersByTimeAsync(120000); await rejected;
     expect(remove).toHaveBeenCalledTimes(1);
     expect(document.getElementById("cevai-guest-verification")).toBeNull();
+  });
+});
+
+describe("public site key configuration", () => {
+  it("uses an explicit environment key first", () => {
+    expect(resolveTurnstileSiteKey("  0xENV  ")).toBe("0xENV");
+  });
+  it("uses the public default for absent or blank environment values", () => {
+    expect(resolveTurnstileSiteKey(undefined)).toBe("0x4AAAAAAFST2lM6mrSDqNSA");
+    expect(resolveTurnstileSiteKey("  ")).toBe(DEFAULT_TURNSTILE_SITE_KEY);
   });
 });
