@@ -302,7 +302,7 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
       lap("banco");
     }
     ms["total"] = Date.now() - t0;
-    console.log("[searchPlaces]", JSON.stringify({ category: data.category ?? null, query: data.query ?? null, rank: data.rank ?? "popularity", withPhotos, radius: data.radius ?? null, ms, google: all.length, descartados: dropped.length, mantidos: kept.length }));
+    console.log("[searchPlaces]", JSON.stringify({ tela: withPhotos ? "explorar" : "mapa", category: data.category ?? null, query: data.query ?? null, rank: data.rank ?? "popularity", withPhotos, radius: data.radius ?? null, ms, google: all.length, descartados: dropped.length, mantidos: kept.length }));
     if (dropped.length) console.log("[searchPlaces] descartados", JSON.stringify(dropped.map((p) => ({ nome: p.displayName?.text ?? "", primaryType: p.primaryType ?? null, types: p.types ?? [] }))));
     return places;
 }

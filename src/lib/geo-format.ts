@@ -10,3 +10,5 @@ export function distanceKm(a: Coordinates, b: Coordinates) {
   return 12742 * Math.asin(Math.sqrt(h));
 }
 export const formatKm = (km: number) => (!Number.isFinite(km) || km < 0 ? "" : km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1).replace(".", ",")} km`);
+/** Explorar searches again only when the center moved more than ~1 km. */
+export const shouldRecenter = (prev: Coordinates, next: Coordinates) => distanceKm(prev, next) > 1;

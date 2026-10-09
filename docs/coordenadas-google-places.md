@@ -79,7 +79,7 @@ Fontes oficiais verificadas:
 
 ## Como testar
 
-Validação final: **292/292 testes em 20 arquivos**, TypeScript sem erros e build concluído. A main recebeu otimizações de mapa durante o trabalho; elas foram preservadas, o conflito de distância foi resolvido sem reescrever histórico, e a validação foi repetida sobre a combinação final. O teste SQL isolado passou em **20 verificações**: zero linhas limpas no cenário fresco; quatro no cenário com coordenadas vencidas/sem data/parciais; reexecução sem duplicar tarefas; permissões, campos/vínculos preservados e parada segura diante de colisões/fuso desconhecido. O cron foi simulado; nenhum agendador real nem banco de produção foi usado.
+Validação final: **297/297 testes em 21 arquivos**, TypeScript sem erros e build concluído. A main recebeu otimizações de mapa e login/Explorar durante o trabalho; elas foram preservadas, os conflitos foram resolvidos sem reescrever histórico, e a validação foi repetida sobre a combinação final. O teste SQL isolado passou em **20 verificações**: zero linhas limpas no cenário fresco; quatro no cenário com coordenadas vencidas/sem data/parciais; reexecução sem duplicar tarefas; permissões, campos/vínculos preservados e parada segura diante de colisões/fuso desconhecido. O cron foi simulado; nenhum agendador real nem banco de produção foi usado.
 
 - `npm test`, `npx --no-install tsc --noEmit`, `npm run build` com as variáveis de ambiente de build.
 - Banco isolado: instalar PGlite fora do app e executar `PGLITE_MODULE=/caminho/pglite/dist/index.js node scripts/test-place-coordinate-expiry.mjs`. Simula apenas metadados do cron, não o agendador em funcionamento.

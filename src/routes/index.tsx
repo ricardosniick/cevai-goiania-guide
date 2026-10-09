@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
-  Share2 } from "lucide-react";
+  Share2, Loader2 } from "lucide-react";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -22,7 +22,7 @@ import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { SharedExperiencePhoto } from "@/components/cevai/SharedExperiencePhoto";
-import { distanceKm } from "@/lib/geo-format";
+import { distanceKm, shouldRecenter } from "@/lib/geo-format";
 import { DistanceText } from "@/components/cevai/DistanceText";
 import { saveExperiencePhoto } from "@/lib/experience-photo";
 import { deleteExperience } from "@/lib/delete-experience";
@@ -104,15 +104,19 @@ function CeVaiApp() {
     void supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle().then(({ data }) => { if (data?.full_name) setProfileName(data.full_name); });
   }, [user]);
 
+  // First Explorar search waits for GPS (success or failure) or GEO_WAIT_MS, whichever comes first.
+  const [locSettled, setLocSettled] = useState(false);
   const locate = useCallback((announce = false) => {
-    if (!("geolocation" in navigator)) { if (announce) notify("Localização indisponível neste aparelho."); return; }
+    if (!("geolocation" in navigator)) { setLocSettled(true); if (announce) notify("Localização indisponível neste aparelho."); return; }
     navigator.geolocation.getCurrentPosition(
-      (p) => setLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => { if (announce) notify("Sem acesso à localização. Mostrando Goiânia."); },
+      (p) => { setLocation({ lat: p.coords.latitude, lng: p.coords.longitude }); setLocSettled(true); },
+      () => { setLocSettled(true); if (announce) notify("Sem acesso à localização. Mostrando Goiânia."); },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
     );
   }, [notify]);
   useEffect(() => { if (user) locate(); }, [user, locate]);
+  useEffect(() => { if (!user || locSettled) return; const t = window.setTimeout(() => setLocSettled(true), GEO_WAIT_MS); return () => window.clearTimeout(t); }, [user, locSettled]);
+  const geoReady = !user || locSettled;
 
   const [shared, setShared] = useState(false);
   useEffect(() => { if (captureSharedLink()) setShared(true); }, []);
@@ -137,13 +141,14 @@ function CeVaiApp() {
       <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
         <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? NaN, lng: e.place?.lng ?? NaN, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "" } : null }) } : null}>
         <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
-          {screen === "welcome" && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
+          {screen === "welcome" && (!authReady || user) && <EnteringScreen />}
+          {screen === "welcome" && authReady && !user && <WelcomeScreen ready={authReady} onSignup={() => go("signup")} onLogin={() => go("login")} onExplore={() => go("home")} />}
           {screen === "login" && <LoginScreen onBack={() => go("welcome", true)} onSignup={() => go("signup")} onForgot={() => go("forgot")} onSuccess={onAuthed} notify={notify} />}
           {screen === "signup" && <SignupScreen onBack={() => go("welcome", true)} onLogin={() => go("login")} onDone={(u) => { if (u) setUser(u); go("signup-done"); }} notify={notify} />}
           {screen === "signup-done" && <SignupDoneScreen confirmed={!!user} onContinue={() => go(user ? "home" : "login")} />}
           {screen === "forgot" && <ForgotScreen onBack={() => go("login", true)} notify={notify} />}
           {screen === "new-password" && <NewPasswordScreen onDone={() => go("home")} notify={notify} />}
-          {screen === "home" && <HomeScreen user={user} center={center} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} />}
+          {screen === "home" && <HomeScreen user={user} center={center} geoReady={geoReady} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} />}
           {screen === "categories" && <CategoriesScreen value={category} onBack={() => go("home", true)} onPick={(k) => { setCategory(k); go("home", true); }} />}
           {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
           {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} onLogin={() => go("login")} notify={notify} />}
@@ -173,7 +178,15 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
   </nav>;
 }
 
+const GEO_WAIT_MS = 3000;
+
 /* ---------------- Onboarding & auth ---------------- */
+
+function EnteringScreen() {
+  return <section className="grid h-full place-items-center bg-background" role="status" aria-label="Entrando">
+    <div className="flex flex-col items-center gap-4"><Logo size="md" /><Loader2 size={28} className="animate-spin text-primary" /><p className="text-sm font-bold text-muted-foreground">Entrando…</p></div>
+  </section>;
+}
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   return <section className="relative h-full overflow-hidden bg-primary">
@@ -202,17 +215,22 @@ function PasswordField({ label, value, onChange, autoComplete }: { label: string
 }
 
 function GoogleButton({ onSuccess, notify }: { onSuccess: (u: User) => void; notify: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   return <>
     <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div>
-    <Button variant="outline" onClick={async () => {
+    <Button variant="outline" disabled={busy} aria-busy={busy} onClick={async () => {
+      if (busyRef.current) return;
+      busyRef.current = true; setBusy(true);
+      const reset = () => { busyRef.current = false; setBusy(false); };
       try {
         const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-        if (r.error) return notify(friendlyError(r.error, "Não foi possível entrar com Google.", "google"));
-        if (r.redirected) return;
+        if (r.error) { reset(); return notify(friendlyError(r.error, "Não foi possível entrar com Google.", "google")); }
+        if (r.redirected) return; // stays loading while the browser leaves for Google
         const { data } = await supabase.auth.getUser();
-        if (data.user) onSuccess(data.user);
-      } catch (e) { notify(friendlyError(e, "Não foi possível entrar com Google.", "google")); }
-    }} className="h-12 w-full rounded-full border-border bg-card font-bold text-foreground"><span className="mr-2 font-black text-secondary">G</span>Continuar com Google</Button>
+        if (data.user) onSuccess(data.user); else reset();
+      } catch (e) { reset(); notify(friendlyError(e, "Não foi possível entrar com Google.", "google")); }
+    }} className="h-12 w-full rounded-full border-border bg-card font-bold text-foreground">{busy ? <><Loader2 size={16} className="mr-2 animate-spin text-secondary" />Entrando com Google…</> : <><span className="mr-2 font-black text-secondary">G</span>Continuar com Google</>}</Button>
   </>;
 }
 
@@ -304,10 +322,13 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
 
 /* ---------------- Explorar ---------------- */
 
-function HomeScreen({ user, center, category, onCategory, onOpen, onLogin, onAll }: { user: User | null; center: LatLng; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void }) {
+function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpen, onLogin, onAll }: { user: User | null; center: LatLng; geoReady?: boolean; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   useEffect(() => { const t = window.setTimeout(() => setQuery(input.trim()), 500); return () => window.clearTimeout(t); }, [input]);
-  const places = usePlaces(user, center, category, query);
+  // Freeze the search center once location settles; only a later move of more than ~1 km searches again.
+  const [searchCenter, setSearchCenter] = useState<LatLng | null>(null);
+  useEffect(() => { if (geoReady) setSearchCenter((prev) => (!prev || shouldRecenter(prev, center) ? center : prev)); }, [geoReady, center]);
+  const places = usePlaces(user, searchCenter ?? center, category, query, undefined, !!searchCenter);
   const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date()).toUpperCase();
   const stallHits = useQuery({
     queryKey: ["stall-search", query], enabled: !!user && query.length >= 2,
