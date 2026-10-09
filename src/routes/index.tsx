@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LIST_LABELS, type Screen, type MainScreen, type LatLng, type SavedList, type Stall, type Experience, type PlaceStat } from "@/components/cevai/types";
 import { ManageCtx } from "@/components/cevai/manage-context";
 import { Logo } from "@/components/cevai/Logo";
-import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, ErrorBox, ListError, Stars, Field, CeVaiRating, fmt1 } from "@/components/cevai/shared";
+import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, ErrorBox, ListError, Stars, Field, CeVaiRating, fmt1, EmptyState } from "@/components/cevai/shared";
 import { StallsPanel } from "@/components/cevai/StallsPanel";
 import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
@@ -137,7 +137,7 @@ function CeVaiApp() {
   const main = screen === "home" || screen === "map" || screen === "saved" || screen === "profile";
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-background">
+    <main className="cevai-app fixed inset-0 overflow-hidden bg-background">
       <div className="relative mx-auto flex h-full w-full max-w-[480px] flex-col overflow-hidden bg-background md:border-x md:border-border">
         <ManageCtx.Provider value={user ? { user, notify, onEdit: (e) => setModal({ open: true, edit: e, place: { id: e.place_id, name: e.place?.name ?? "Lugar", address: e.place?.address ?? "", category: e.category, typeLabel: "", lat: e.place?.lat ?? NaN, lng: e.place?.lng ?? NaN, rating: null, ratingCount: null, photoUrl: e.place?.photo_url ?? null, photoName: null, photoAttribution: null }, stall: e.stall_id && e.stall ? { id: e.stall_id, place_id: e.place_id, name: e.stall.name, emoji: e.stall.emoji, kind: "" } : null }) } : null}>
         <div key={screen} ref={screenRef} className={`min-h-0 flex-1 ${direction === "back" ? "animate-screen-back" : "animate-screen-in"}`}>
@@ -152,8 +152,8 @@ function CeVaiApp() {
           {screen === "categories" && <CategoriesScreen value={category} onBack={() => go("home", true)} onPick={(k) => { setCategory(k); go("home", true); }} />}
           {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
           {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} onLogin={() => go("login")} notify={notify} />}
-          {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} />}
-          {screen === "profile" && <ProfileScreen user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} notify={notify} />}
+          {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} onExplore={() => go("home")} onRegister={() => openModal(null)} />}
+          {screen === "profile" && <ProfileScreen onRegister={() => openModal(null)} user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} notify={notify} />}
         </div>
         </ManageCtx.Provider>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
@@ -168,12 +168,12 @@ function CeVaiApp() {
 function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNavigate: (s: MainScreen) => void; onAdd: () => void }) {
   const item = (id: MainScreen, label: string, Icon: typeof Compass) => (
     <button onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={`flex flex-1 flex-col items-center gap-1 py-2 text-[11px] font-bold ${active === id ? "text-primary" : "text-muted-foreground"}`}>
-      <Icon size={22} strokeWidth={active === id ? 2.6 : 2} />{label}
+      <span className="nav-icon"><Icon size={22} strokeWidth={active === id ? 2.6 : 2} /><span aria-hidden="true" className="nav-indicator" /></span>{label}
     </button>
   );
   return <nav className="relative z-30 flex shrink-0 items-end border-t border-border bg-card px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
     {item("home", "Explorar", Compass)}{item("map", "Mapa", MapIcon)}
-    <div className="flex flex-1 justify-center"><button onClick={onAdd} aria-label="Registrar experiência" className="-mt-6 grid size-14 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg ring-4 ring-background transition-transform active:scale-95"><Plus size={28} strokeWidth={2.8} /></button></div>
+    <div className="flex flex-1 justify-center"><button data-central-add onClick={onAdd} aria-label="Registrar experiência" className="-mt-6 grid size-14 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-lg ring-4 ring-background transition-transform active:scale-95"><Plus size={28} strokeWidth={2.8} /></button></div>
     {item("saved", "Salvos", Bookmark)}{item("profile", "Perfil", UserRound)}
   </nav>;
 }
@@ -348,16 +348,16 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
     </form>
     <CategoryChips value={category} onChange={onCategory} chips={HOME_CHIPS} onAll={onAll} className="mt-4" />
     <>
-      <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${filterEmoji(category)} ${filterLabel(category)} perto de você` : "Destaques da cidade"}</h2></div>
+      <div className="mt-8 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${filterEmoji(category)} ${filterLabel(category)} perto de você` : "Destaques da cidade"}</h2></div>
       {places.isError && <ErrorBox error={places.error} />}
       {places.isLoading && <div className="mt-3 space-y-3 px-5"><Skeleton className="h-56" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>}
       {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
-      {first && <button onClick={() => onOpen(first.id)} className="mx-5 mt-3 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left shadow-md">
+      {first && <button key={first.id} data-entry-index="0" onClick={() => onOpen(first.id)} className="place-surface mx-5 mt-4 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left">
         <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
         <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><DistanceText km={distanceKm(center, first)} prefix="· " /></p>{user && <p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p>}</div>
       </button>}
       {stallHits.data && stallHits.data.length > 0 && <div className="mt-5 px-5"><p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Barraquinhas cadastradas pela comunidade</p><div className="mt-2 space-y-2">{stallHits.data.map((st) => <button key={st.id} onClick={() => onOpen(st.place_id)} className="flex w-full items-center gap-3 rounded-2xl bg-card p-3 text-left shadow-sm"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted text-xl">{st.emoji}</span><div className="min-w-0"><p className="truncate font-bold">{st.name}</p><p className="truncate text-xs text-muted-foreground">em {st.fair?.name ?? "feira"}</p></div></button>)}</div></div>}
-      <div className="mt-3 space-y-3 px-5">{rest.map((p) => <PlaceRow key={p.id} place={p} center={center} stat={stats.data?.[p.id]} showCommunity={!!user} onOpen={() => onOpen(p.id)} />)}</div>
+      <div className="mt-4 space-y-4 px-5">{rest.map((p, index) => <PlaceRow entryIndex={index + 1} key={p.id} place={p} center={center} stat={stats.data?.[p.id]} showCommunity={!!user} onOpen={() => onOpen(p.id)} />)}</div>
       {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
     </>
   </section>;
@@ -383,8 +383,8 @@ function GoogleRating({ rating, count, size = "sm" }: { rating: number | null; c
   return <span className="inline-flex items-center gap-1"><Star size={size === "md" ? 14 : 11} className="fill-secondary text-secondary" />{fmt1(rating)}<span className="rounded-sm bg-muted px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-muted-foreground">Google</span>{count ? <span className="font-semibold text-muted-foreground">({count})</span> : null}</span>;
 }
 
-function PlaceRow({ place, center, stat, showCommunity = true, onOpen }: { place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
-  return <button onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left shadow-sm">
+function PlaceRow({ place, center, stat, showCommunity = true, onOpen, entryIndex }: { entryIndex?: number; place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
+  return <button data-entry-index={entryIndex} onClick={onOpen} className="place-surface flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left">
     <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
     <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><DistanceText km={distanceKm(center, place)} prefix="· " /></p>{showCommunity && <CeVaiRating stat={stat} />}</div>
     <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
@@ -502,7 +502,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
             <h2 className="font-display text-lg font-black">Experiências no Cê vai</h2>
             <p className="mt-1 text-xs text-muted-foreground">Suas experiências são privadas. Aqui aparecem as suas e as que outras pessoas escolheram compartilhar.</p>
             <div className="mt-4 space-y-3">
-              {experiences.data?.filter((e) => !e.stall_id).length ? experiences.data.filter((e) => !e.stall_id).map((e) => <ExperienceCard key={e.id} exp={e} own={e.user_id === user?.id} />) : <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência.</div>}
+              {experiences.data?.filter((e) => !e.stall_id).length ? experiences.data.filter((e) => !e.stall_id).map((e) => <ExperienceCard key={e.id} exp={e} own={e.user_id === user?.id} />) : <EmptyState icon={Heart} title="Ainda sem experiências" text="Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência." action="Registrar experiência" onAction={() => onRegister(p)} />}
             </div>
           </div>)}
           {tab === "Barraquinhas" && !user && <LoginPrompt onLogin={onLogin} text="Entre para conhecer as barraquinhas cadastradas pela comunidade." />}
@@ -523,10 +523,10 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
   </section>;
 }
 
-function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experience; own: boolean; showPlace?: boolean; onOpen?: () => void }) {
+function ExperienceCard({ exp, own, showPlace = false, onOpen, entryIndex }: { entryIndex?: number; exp: Experience; own: boolean; showPlace?: boolean; onOpen?: () => void }) {
   const ctx = useContext(ManageCtx);
   const date = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(exp.created_at));
-  return <article className="overflow-hidden rounded-2xl bg-card shadow-sm">
+  return <article data-entry-index={entryIndex} className="place-surface overflow-hidden rounded-2xl bg-card">
     {(exp.photos.length > 0 || !!exp.sharedPhotoPaths?.length) && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}{exp.sharedPhotoPaths?.map((path) => <SharedExperiencePhoto key={path} path={path} {...(ctx ? { viewerId: ctx.user.id } : {})} className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
     <div className="relative p-4">
       {own && <ExperienceMenu exp={exp} />}
@@ -582,7 +582,7 @@ function ExperienceMenu({ exp }: { exp: Experience }) {
 
 /* ---------------- Salvos ---------------- */
 
-function SavedScreen({ user, onOpen, onLogin }: { user: User | null; onOpen: (id: string) => void; onLogin: () => void }) {
+function SavedScreen({ user, onOpen, onLogin, onExplore, onRegister }: { user: User | null; onOpen: (id: string) => void; onLogin: () => void; onExplore: () => void; onRegister: () => void }) {
   const saved = useSaved(user);
   const [list, setList] = useState<SavedList>("quero_conhecer");
   const items = (saved.data ?? []).filter((s) => s.list === list);
@@ -591,17 +591,17 @@ function SavedScreen({ user, onOpen, onLogin }: { user: User | null; onOpen: (id
     {!user ? <LoginPrompt onLogin={onLogin} text="Entre para guardar lugares que quer conhecer e seus favoritos." /> : <>
       <div className="mt-4 flex gap-2 px-5">{(Object.keys(LIST_LABELS) as SavedList[]).map((l) => <button key={l} onClick={() => setList(l)} className={`rounded-full px-4 py-2 text-sm font-bold ${list === l ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm"}`}>{LIST_LABELS[l]}</button>)}</div>
       {saved.isError && <div className="mx-5 mt-5"><ListError onRetry={() => void saved.refetch()} /></div>}
-      <div className="mt-5 grid grid-cols-2 gap-3 px-5">
-        {items.map((s) => <button key={s.place_id} onClick={() => onOpen(s.place_id)} className="overflow-hidden rounded-2xl bg-card text-left shadow-sm"><PlacePhoto src={s.place?.photo_url ?? null} alt={s.place?.name ?? ""} className="h-28 w-full" /><div className="p-3"><p className="text-[10px] font-extrabold text-secondary">{emojiOf(s.place?.category ?? "")} {s.place?.category}</p><p className="line-clamp-2 font-display text-sm font-black">{s.place?.name}</p></div></button>)}
+      <div key={list} className="mt-6 grid grid-cols-2 gap-4 px-5">
+        {items.map((s, index) => <button data-entry-index={index} key={s.place_id} onClick={() => onOpen(s.place_id)} className="place-surface overflow-hidden rounded-2xl bg-card text-left"><PlacePhoto src={s.place?.photo_url ?? null} alt={s.place?.name ?? ""} className="h-28 w-full" /><div className="p-3"><p className="text-[10px] font-extrabold text-secondary">{emojiOf(s.place?.category ?? "")} {s.place?.category}</p><p className="line-clamp-2 font-display text-sm font-black">{s.place?.name}</p></div></button>)}
       </div>
-      {!saved.isLoading && !saved.isError && items.length === 0 && <p className="mx-5 mt-2 rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{list === "ja_fui" ? "Registre uma experiência e o lugar aparece aqui." : "Nada por aqui ainda. Abra um lugar e toque em Quero ir ou no coração."}</p>}
+      {!saved.isLoading && !saved.isError && items.length === 0 && <EmptyState icon={list === "favoritos" ? Heart : Bookmark} title="Seu próximo lugar espera por você" text={list === "ja_fui" ? "Registre uma experiência e o lugar aparece aqui." : "Nada por aqui ainda. Abra um lugar e toque em Quero ir ou no coração."} action={list === "ja_fui" ? "Registrar experiência" : "Explorar lugares"} onAction={list === "ja_fui" ? onRegister : onExplore} />}
     </>}
   </section>;
 }
 
 /* ---------------- Perfil ---------------- */
 
-function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { user: User | null; name: string; onOpen: (id: string) => void; onLogin: () => void; onSignOut: () => void; notify: (m: string) => void }) {
+function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify, onRegister }: { onRegister: () => void; user: User | null; name: string; onOpen: (id: string) => void; onLogin: () => void; onSignOut: () => void; notify: (m: string) => void }) {
   const expQc = useQueryClient();
   const exps = useQuery({ queryKey: ["experiences", "mine", user?.id], queryFn: () => loadExperiences({ userId: user!.id }, expQc), enabled: !!user });
   const saved = useSaved(user);
@@ -625,13 +625,13 @@ function ProfileScreen({ user, name, onOpen, onLogin, onSignOut, notify }: { use
       <div className="border-x border-border"><p className="font-display text-2xl font-black text-primary">{photos.length}</p><p className="text-[11px] font-bold text-muted-foreground">minhas fotos</p></div>
       <div><p className="font-display text-2xl font-black text-primary">{saved.data?.length ?? 0}</p><p className="text-[11px] font-bold text-muted-foreground">salvos</p></div>
     </div>
-    <div className="mt-6 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">Minhas experiências</h2></div>
+    <div className="mt-8 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">Minhas experiências</h2></div>
     <div className="mt-3 flex gap-2 px-5">{([["lista", "Lista"], ["mapa", "Mapa"], ["fotos", "Fotos"], ["livros", "📚 Livros"]] as const).map(([k, l]) => <button key={k} onClick={() => setView(k)} className={`rounded-full px-4 py-2 text-sm font-bold ${view === k ? "bg-primary text-primary-foreground" : "bg-card shadow-sm"}`}>{l}</button>)}</div>
     <div key={view} className="mt-4 animate-tab-in px-5">
-      {view === "lista" && exps.isError ? <ListError onRetry={() => void exps.refetch()} /> : view === "lista" && (list.length ? <div className="space-y-3">{list.map((e) => <ExperienceCard key={e.id} exp={e} own showPlace onOpen={() => onOpen(e.place_id)} />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Você ainda não registrou nenhuma experiência. Toque no + para começar.</p>)}
+      {view === "lista" && exps.isError ? <ListError onRetry={() => void exps.refetch()} /> : view === "lista" && (exps.isLoading ? <div className="space-y-4"><Skeleton className="h-40" /><Skeleton className="h-40" /></div> : list.length ? <div className="space-y-4">{list.map((e, index) => <ExperienceCard entryIndex={index} key={e.id} exp={e} own showPlace onOpen={() => onOpen(e.place_id)} />)}</div> : <EmptyState icon={Compass} title="Seu mapa começa com uma história" text="Você ainda não registrou nenhuma experiência. Toque no + para começar." action="Registrar experiência" onAction={onRegister} />)}
       {view === "livros" && <BooksPanel user={user} notify={notify} />}
       {view === "mapa" && <MapView center={GOIANIA} markers={markers} onSelect={onOpen} className="h-80 overflow-hidden rounded-2xl" />}
-      {view === "fotos" && (photos.length ? <div className="grid grid-cols-3 gap-1.5">{photos.map((u) => <img key={u} src={u} alt="Minha foto" className="aspect-square w-full rounded-lg object-cover" />)}</div> : <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Fotos das suas experiências aparecem aqui.</p>)}
+      {view === "fotos" && (photos.length ? <div className="grid grid-cols-3 gap-1.5">{photos.map((u) => <img key={u} src={u} alt="Minha foto" className="aspect-square w-full rounded-lg object-cover" />)}</div> : <EmptyState icon={Camera} title="Guarde seus bons momentos" text="Fotos das suas experiências aparecem aqui." action="Registrar experiência" onAction={onRegister} />)}
     </div>
   </section>;
 }
