@@ -23,7 +23,7 @@ const userRpc = vi.fn();
 const globalRpc = vi.fn();
 const rpc = vi.fn((name: string, args: Record<string, unknown>) =>
   name === "hit_rate_limit" ? userRpc(args) : name === "reserve_global_budget" ? globalRpc(args) : Promise.resolve({ data: null, error: null }));
-const upsert = vi.fn(async () => ({ error: null }));
+const upsert = vi.fn(async (_rows: unknown, _options?: unknown) => ({ error: null }));
 vi.mock("@/integrations/supabase/client.server", () => ({
   supabaseAdmin: { rpc: (name: string, args: Record<string, unknown>) => rpc(name, args), from: () => ({ upsert }) },
 }));
@@ -308,5 +308,18 @@ describe("map search: no photos, nearest first, timeouts", () => {
   });
   it("rejects an unknown rank value", () => {
     expect(() => (searchPlaces as unknown as Call)({ rank: "random" }, context)).toThrow();
+  });
+});
+
+describe("Google refresh after coordinate cleanup", () => {
+  const googlePlace = { id: PLACE_ID, displayName: { text: "Bar teste" }, formattedAddress: "Rua teste", primaryType: "bar", types: ["bar"], location: { latitude: -16.68, longitude: -49.25 } };
+  it.each(handlers.filter(h => !h.name.includes("Guest")))("$name writes both coordinates and a fresh timestamp together", async ({ fn, input, name }) => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(name === "searchPlaces" ? { places: [googlePlace] } : googlePlace), { status: 200 }));
+    await fn(name === "postSituation" ? { ...(input as object), situations: ["🙂 Movimento tranquilo"] } : input, context);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const payload = upsert.mock.calls[0]![0];
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    expect(row).toMatchObject({ google_place_id: PLACE_ID, lat: -16.68, lng: -49.25 });
+    expect(Number.isFinite(Date.parse((row as { coords_fetched_at: string }).coords_fetched_at))).toBe(true);
   });
 });
