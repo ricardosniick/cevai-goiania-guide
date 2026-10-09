@@ -143,4 +143,28 @@ describe("server-side guest proof", () => {
     await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS20]");
     expect(request).not.toHaveBeenCalled();
   });
+  it("identifies preparation failure before any external request", async () => {
+    vi.stubGlobal("URLSearchParams", class { constructor() { throw new TypeError("private-token unit-test-secret"); } });
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS21] [prepare:type_error]");
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("unit-test-secret");
+  });
+  it("identifies fetch rejection without copying its message", async () => {
+    request.mockRejectedValue(new TypeError("Unsupported redirect private-token unit-test-secret"));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS06] [send:type_error]");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("unit-test-secret");
+  });
+  it("identifies response body failure separately from send", async () => {
+    request.mockResolvedValue({ ok: true, json: async () => { throw new TypeError("private-token"); } });
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS06] [read:type_error]");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+  });
+  it("does not copy arbitrary error names into diagnostics", async () => {
+    request.mockRejectedValue({ name: "private-token", message: "unit-test-secret" });
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS06] [send:unknown]");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("unit-test-secret");
+  });
 });

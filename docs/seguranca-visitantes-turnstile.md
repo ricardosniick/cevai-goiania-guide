@@ -50,6 +50,9 @@ O servidor acrescenta uma referência fixa `[TSxx]` à mensagem de recusa e regi
 | TS18 | Falha de certificado TLS identificada pelo runtime |
 | TS19 | Acesso de rede negado identificado pelo runtime (EACCES/EPERM) |
 | TS20 | Runtime sem fetch ou AbortController |
+| TS21 | Falha ao criar o controlador ou o corpo da requisição, antes do fetch |
+
+As exceções recebem também uma etapa (`prepare`, `send`, `read`) e uma classe segura de erro. Exemplo: `[TS06] [send:type_error]` indica rejeição durante a chamada ao fetch, mas não prova que houve tráfego externo nem identifica por si só uma opção inválida. `[TS06] [read:type_error]` indica que o fetch devolveu uma resposta e a leitura falhou. Só classes conhecidas são copiadas; nomes arbitrários viram `unknown`. Não registrar mensagens/stack brutos do erro. A alteração separa o diagnóstico sem mudar redirect, prazo, domínio, chave, cotas ou autorização.
 
 O prazo usa AbortController e um temporizador cancelado ao terminar, sem depender de AbortSignal.timeout. O prazo vale também para a leitura da resposta. Não há repetição automática nem mudança de teto: tokens continuam de uso único. Apenas nomes/códigos reconhecidos são classificados; exceções sem esses sinais continuam TS06, sem inferir a causa por texto. TS17–TS19 exigem verificar DNS, certificados ou regras de saída do ambiente que executa o Draft 1; testes locais em outra máquina não confirmam essa infraestrutura. Não ignorar validação TLS nem liberar chamadas pagas quando a rede falha.
 

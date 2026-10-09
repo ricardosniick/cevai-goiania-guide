@@ -1,6 +1,6 @@
 import { GUEST_CHALLENGE_ACTION, GUEST_CHALLENGE_MSG } from "./guest-challenge";
 
-type FailureCode = "TS01" | "TS02" | "TS03" | "TS04" | "TS05" | "TS06" | "TS07" | "TS08" | "TS09" | "TS10" | "TS11" | "TS12" | "TS13" | "TS14" | "TS15" | "TS16" | "TS17" | "TS18" | "TS19" | "TS20";
+type FailureCode = "TS01" | "TS02" | "TS03" | "TS04" | "TS05" | "TS06" | "TS07" | "TS08" | "TS09" | "TS10" | "TS11" | "TS12" | "TS13" | "TS14" | "TS15" | "TS16" | "TS17" | "TS18" | "TS19" | "TS20" | "TS21";
 const REASONS: Record<FailureCode, string> = {
   TS01: "missing_secret", TS02: "missing_hostnames", TS03: "invalid_hostnames_config",
   TS04: "invalid_token_input", TS05: "provider_http_error", TS06: "provider_network_error",
@@ -8,13 +8,29 @@ const REASONS: Record<FailureCode, string> = {
   TS10: "expired_or_replayed_token", TS11: "provider_rejected_token", TS12: "provider_rejected_challenge",
   TS13: "action_mismatch", TS14: "hostname_mismatch", TS15: "invalid_token_timestamp",
   TS16: "provider_timeout", TS17: "provider_dns_error", TS18: "provider_tls_error",
-  TS19: "provider_network_denied", TS20: "unsupported_server_runtime",
+  TS19: "provider_network_denied", TS20: "unsupported_server_runtime", TS21: "request_preparation_failed",
 };
 
-function deny(code: FailureCode): never {
+type FailureStage = "prepare" | "send" | "read";
+type ErrorKind = "type_error" | "syntax_error" | "abort_error" | "timeout_error" | "error" | "unknown";
+
+function errorKind(error: unknown): ErrorKind {
+  const name = error && typeof error === "object" ? (error as Record<string, unknown>)["name"] : undefined;
+  switch (name) {
+    case "TypeError": return "type_error";
+    case "SyntaxError": return "syntax_error";
+    case "AbortError": return "abort_error";
+    case "TimeoutError": return "timeout_error";
+    case "Error": return "error";
+    default: return "unknown";
+  }
+}
+
+function deny(code: FailureCode, stage?: FailureStage, kind?: ErrorKind): never {
   // Only a fixed classification is logged: no token, secret, hostname list or raw provider response.
-  console.error("[guest-challenge]", code, REASONS[code]);
-  throw new Error(`${GUEST_CHALLENGE_MSG} [${code}]`);
+  const detail = stage ? ` [${stage}:${kind ?? "unknown"}]` : "";
+  console.error("[guest-challenge]", code, REASONS[code], detail);
+  throw new Error(`${GUEST_CHALLENGE_MSG} [${code}]${detail}`);
 }
 
 /** Classify only recognized names/codes; never stringify exceptions or copy their messages. */
@@ -36,7 +52,12 @@ function transportFailure(error: unknown, timedOut: boolean): FailureCode {
 
 async function siteverify(secret: string, token: string): Promise<unknown> {
   if (typeof fetch !== "function" || typeof AbortController !== "function") deny("TS20");
-  const controller = new AbortController();
+  let controller: AbortController;
+  let body: URLSearchParams;
+  try {
+    controller = new AbortController();
+    body = new URLSearchParams({ secret, response: token });
+  } catch (error) { deny("TS21", "prepare", errorKind(error)); }
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, 8000);
   try {
@@ -45,14 +66,14 @@ async function siteverify(secret: string, token: string): Promise<unknown> {
       response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
         method: "POST", redirect: "error", signal: controller.signal,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ secret, response: token }),
+        body,
       });
-    } catch (error) { deny(transportFailure(error, timedOut)); }
+    } catch (error) { deny(transportFailure(error, timedOut), "send", errorKind(error)); }
     if (!response.ok) deny("TS05");
     try { return await response.json(); }
     catch (error) {
-      if (error instanceof SyntaxError) deny("TS07");
-      deny(transportFailure(error, timedOut));
+      if (errorKind(error) === "syntax_error") deny("TS07", "read", "syntax_error");
+      deny(transportFailure(error, timedOut), "read", errorKind(error));
     }
   } finally { clearTimeout(timer); }
 }
