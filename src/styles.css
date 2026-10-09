@@ -134,6 +134,18 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/* Overscroll control: Chrome (Android) triggers pull-to-refresh when the
+   gesture reaches the top of the scroll chain. Keep it off at the document
+   level and contain it inside every inner scrollable so the gesture never
+   escapes to the browser. Unlayered so it wins over Tailwind utilities. */
+html {
+  overscroll-behavior-y: none;
+}
+
+.overflow-y-auto {
+  overscroll-behavior-y: contain;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
