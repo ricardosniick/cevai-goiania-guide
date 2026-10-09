@@ -21,6 +21,7 @@ import { StallsPanel } from "@/components/cevai/StallsPanel";
 import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
+import { SharedExperiencePhoto } from "@/components/cevai/SharedExperiencePhoto";
 import { distanceKm, formatKm } from "@/lib/geo-format";
 import { saveExperiencePhoto } from "@/lib/experience-photo";
 import { deleteExperience } from "@/lib/delete-experience";
@@ -416,7 +417,8 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
   const details = useServerFn(user ? getPlaceDetails : getGuestPlaceDetails);
   const queryClient = useQueryClient();
   const place = useQuery({ queryKey: ["place", user ? "member" : "guest", placeId], queryFn: () => details({ data: { placeId } }), staleTime: 30 * 60 * 1000, retry: false });
-  const experiences = useQuery({ queryKey: ["experiences", "place", placeId], queryFn: () => loadExperiences({ placeId }, queryClient), enabled: !!user });
+  const experiences = useQuery({ queryKey: ["experiences", "place", placeId, user?.id], queryFn: () => loadExperiences({ placeId, ...(user ? { viewerId: user.id } : {}) }, queryClient), enabled: !!user,
+    refetchInterval: (query) => query.state.data?.some((e) => e.sharedPhotoPaths?.length) ? 240_000 : false, refetchIntervalInBackground: false });
   const saved = useSaved(user);
   const stats = usePlaceStats(user, [placeId]);
   const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos" | "Barraquinhas">("Sobre");
@@ -495,9 +497,10 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
 }
 
 function ExperienceCard({ exp, own, showPlace = false, onOpen }: { exp: Experience; own: boolean; showPlace?: boolean; onOpen?: () => void }) {
+  const ctx = useContext(ManageCtx);
   const date = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" }).format(new Date(exp.created_at));
   return <article className="overflow-hidden rounded-2xl bg-card shadow-sm">
-    {exp.photos.length > 0 && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
+    {(exp.photos.length > 0 || !!exp.sharedPhotoPaths?.length) && <div className="flex gap-1 overflow-x-auto">{exp.photos.map((u) => <img key={u} src={u} alt="Foto da experiência" className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}{exp.sharedPhotoPaths?.map((path) => <SharedExperiencePhoto key={path} path={path} {...(ctx ? { viewerId: ctx.user.id } : {})} className="h-40 w-full min-w-[70%] flex-1 object-cover" />)}</div>}
     <div className="relative p-4">
       {own && <ExperienceMenu exp={exp} />}
       {showPlace && <button onClick={onOpen} className="mb-1 pr-8 font-display text-base font-black text-left">{exp.place?.name ?? "Lugar"}</button>}
@@ -724,4 +727,3 @@ function ExperienceModal({ user, center, location, initialPlace, initialStall, e
     </div>
   </div>;
 }
-

@@ -4,20 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolvePlacePhotos } from "@/lib/places.functions";
 import type { Experience } from "@/components/cevai/types";
 
-export async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string }, qc: QueryClient): Promise<Experience[]> {
+export async function loadExperiences(filter: { userId?: string; placeId?: string; stallId?: string; viewerId?: string }, qc: QueryClient): Promise<Experience[]> {
   let q = supabase.from("experiences").select("id, place_id, stall_id, stall:fair_stalls(name, emoji), category, rating, comment, would_return, is_public, created_at, user_id, place:places(name, address, lat, lng, photo_url, photo_name), scores:experience_scores(criterion, score), photos:experience_photos(storage_path)").order("created_at", { ascending: false });
   if (filter.userId) q = q.eq("user_id", filter.userId);
   if (filter.placeId) q = q.eq("place_id", filter.placeId);
   if (filter.stallId) q = q.eq("stall_id", filter.stallId);
   const { data, error } = await q;
   if (error) throw error;
-  const paths = (data ?? []).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path));
+  const viewerId = filter.viewerId ?? filter.userId;
+  const paths = [...new Set((data ?? []).filter((e) => e.user_id === viewerId).flatMap((e) => (e.photos ?? []).map((p) => p.storage_path)).filter((path) => path.split("/")[0] === viewerId))];
   const urls: Record<string, string> = {};
   if (paths.length) {
-    const { data: signed } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
-    signed?.forEach((s) => { if (s.path && s.signedUrl) urls[s.path] = s.signedUrl; });
+    try {
+      const { data: signed, error: signError } = await supabase.storage.from("experience-photos").createSignedUrls(paths, 3600);
+      if (!signError) signed?.forEach((s) => { if (s.path && paths.includes(s.path) && s.signedUrl) urls[s.path] = s.signedUrl; });
+    } catch { /* The experience remains readable; never reuse a previous photo URL. */ }
   }
-  return (await withFreshPhotos(data ?? [], qc)).map((e) => ({ ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [], photos: (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u), photoItems: (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) }));
+  return (await withFreshPhotos(data ?? [], qc)).map((e) => {
+    const own = e.user_id === viewerId;
+    return { ...e, place: e.place as Experience["place"], stall: e.stall as Experience["stall"], scores: e.scores ?? [],
+      photos: own ? (e.photos ?? []).map((p) => urls[p.storage_path]).filter((u): u is string => !!u) : [],
+      photoItems: own ? (e.photos ?? []).filter((p) => urls[p.storage_path]).map((p) => ({ path: p.storage_path, url: urls[p.storage_path]! })) : [],
+      sharedPhotoPaths: own ? [] : [...new Set((e.photos ?? []).map((p) => p.storage_path).filter((path) => path.split("/")[0] === e.user_id))],
+    };
+  });
 }
 
 /** Rows joined with `places`: replace photo_url with a fresh URL generated from photo_name (old rows keep their stored URL). */
