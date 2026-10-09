@@ -11,7 +11,7 @@ beforeEach(() => {
   vi.stubEnv("TURNSTILE_SECRET_KEY", "unit-test-secret");
   vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "app.example.test, preview.example.test");
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 describe("server-side guest proof", () => {
   it("verifies against the fixed provider with server-owned secret", async () => {
     await verifyGuestChallenge("fresh-proof");
@@ -95,5 +95,52 @@ describe("server-side guest proof", () => {
     request.mockResolvedValueOnce(new Response("private-token"));
     await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS07]");
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+  });
+  it.each([
+    { cause: { code: "ENOTFOUND" }, code: "TS17" },
+    { cause: { cause: { code: "EAI_AGAIN" } }, code: "TS17" },
+    { cause: { code: "ERR_TLS_CERT_ALTNAME_INVALID" }, code: "TS18" },
+    { cause: { code: "EPERM" }, code: "TS19" },
+    { cause: { code: "UND_ERR_CONNECT_TIMEOUT" }, code: "TS16" },
+    { cause: { name: "TimeoutError" }, code: "TS16" },
+    { cause: { code: "ECONNRESET" }, code: "TS06" },
+  ])("classifies transport failure $code without leaking exception details", async ({ cause, code }) => {
+    request.mockRejectedValue(Object.assign(new Error("private-token unit-test-secret"), { cause }));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow(`[${code}]`);
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("unit-test-secret");
+  });
+  it("supports runtimes without AbortSignal.timeout", async () => {
+    vi.spyOn(AbortSignal, "timeout").mockImplementation(() => { throw new Error("unsupported helper"); });
+    await verifyGuestChallenge("proof");
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  it("aborts after eight seconds and clears the timer", async () => {
+    vi.useFakeTimers();
+    request.mockImplementation((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new DOMException("private-token", "AbortError")), { once: true });
+    }));
+    const pending = expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS16]");
+    await vi.advanceTimersByTimeAsync(8000); await pending;
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("keeps the deadline active while reading the response body", async () => {
+    vi.useFakeTimers();
+    request.mockImplementation(async (_url, init: RequestInit) => ({ ok: true, json: () => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
+    }) }));
+    const pending = expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS16]");
+    await vi.advanceTimersByTimeAsync(8000); await pending;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("does not mislabel a body transport failure as invalid JSON", async () => {
+    request.mockResolvedValue({ ok: true, json: async () => { throw Object.assign(new Error("private-token"), { cause: { code: "ENOTFOUND" } }); } });
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS17]");
+  });
+  it("missing runtime support blocks locally", async () => {
+    vi.stubGlobal("AbortController", undefined);
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS20]");
+    expect(request).not.toHaveBeenCalled();
   });
 });
