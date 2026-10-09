@@ -31,6 +31,7 @@ vi.mock("@/integrations/supabase/client.server", () => ({
 import { searchPlaces, getPlaceDetails, searchGuestPlaces, getGuestPlaceDetails, ensurePlace, postSituation } from "./places.functions";
 import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG } from "./rate-limit";
 import { resolvePlacePhotos } from "./places.functions";
+import { GUEST_BUDGET_MSG } from "./guest-budget";
 
 const fetchMock = vi.fn();
 const PLACE_ID = "ChIJtestPlaceId1234";
@@ -113,7 +114,7 @@ describe.each(handlers)("$name: teto global antes do Google", ({ fn, input, glob
   it.each(globalBlocked)("reserve_global_budget $label → bloqueia sem Google", async ({ setup }) => {
     setup();
     await expect(fn(input, context)).rejects.toThrow(GLOBAL_UNAVAILABLE_MSG);
-    expect(userRpc).toHaveBeenCalledTimes(1);
+    expect(userRpc).toHaveBeenCalledTimes(fn === searchGuestPlaces || fn === getGuestPlaceDetails ? 3 : 1);
     expect(globalRpc).toHaveBeenCalledTimes(1);
     expect(globalRpc.mock.calls[0]?.[0]).toEqual({ _bucket: global, _requested: 1, _allow_partial: false });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -122,7 +123,7 @@ describe.each(handlers)("$name: teto global antes do Google", ({ fn, input, glob
   it("ordem: limite por pessoa e depois reserva global", async () => {
     await fn(input, context).catch(() => {});
     const names = rpc.mock.calls.map((c) => c[0]);
-    expect(names.slice(0, 2)).toEqual(["hit_rate_limit", "reserve_global_budget"]);
+    expect(names.slice(0, fn === searchGuestPlaces || fn === getGuestPlaceDetails ? 4 : 2)).toEqual(fn === searchGuestPlaces || fn === getGuestPlaceDetails ? ["hit_rate_limit", "hit_rate_limit", "hit_rate_limit", "reserve_global_budget"] : ["hit_rate_limit", "reserve_global_budget"]);
   });
 });
 
@@ -197,7 +198,7 @@ describe("visitor discovery boundaries", () => {
     expect(out).toHaveLength(1);
     expect(userRpc.mock.calls[0]?.[0]).toEqual({ _user: "00000000-0000-0000-0000-000000000000", _bucket: "guest_search", _max: 30, _window_seconds: 60 });
     expect(upsert).not.toHaveBeenCalled();
-    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "reserve_global_budget"]);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "hit_rate_limit", "hit_rate_limit", "reserve_global_budget"]);
   });
   it("opens Google details without a session, without writing places or reading personal data", async () => {
     gatewayReply({ id: PLACE_ID, displayName: { text: "Lugar de teste" } });
@@ -205,12 +206,65 @@ describe("visitor discovery boundaries", () => {
     expect(out).toMatchObject({ id: PLACE_ID, name: "Lugar de teste" });
     expect(upsert).not.toHaveBeenCalled();
     expect(userRpc.mock.calls[0]?.[0]).toMatchObject({ _bucket: "guest_details", _max: 60, _window_seconds: 60 });
-    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "reserve_global_budget"]);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["hit_rate_limit", "hit_rate_limit", "hit_rate_limit", "reserve_global_budget"]);
   });
   it("rejects invalid visitor input before consuming either limit", async () => {
     expect(() => (getGuestPlaceDetails as unknown as Call)({ placeId: "../private" }, undefined)).toThrow();
     expect(() => (searchGuestPlaces as unknown as Call)({ radius: 999999 }, undefined)).toThrow();
     expect(rpc).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("visitor budget isolation", () => {
+  const cases = [
+    { fn: searchGuestPlaces, input: { query: "pizza" }, bucket: "text_search", minute: 10, day: 100 },
+    { fn: searchGuestPlaces, input: {}, bucket: "nearby_search", minute: 10, day: 100 },
+    { fn: getGuestPlaceDetails, input: { placeId: PLACE_ID }, bucket: "details_full", minute: 15, day: 150 },
+  ];
+  it.each(cases)("checks both quotas for $bucket before the global reserve", async ({ fn, input, bucket, minute, day }) => {
+    await (fn as unknown as Call)({ ...input, day: 999999, minute: 999999 }, undefined);
+    expect(userRpc.mock.calls[1]?.[0]).toEqual({ _user: "00000000-0000-0000-0000-000000000000", _bucket: `guest_${bucket}_minute`, _max: minute, _window_seconds: 60 });
+    expect(userRpc.mock.calls[2]?.[0]).toEqual({ _user: "00000000-0000-0000-0000-000000000000", _bucket: `guest_${bucket}_day`, _max: day, _window_seconds: 86400 });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+  for (const c of cases) for (const window of ["minute", "day"]) {
+    it(`${c.bucket} ${window} exhaustion prevents paid calls, members still work`, async () => {
+      userRpc.mockImplementation(async (a: { _bucket: string }) => ({ data: a._bucket !== `guest_${c.bucket}_${window}`, error: null }));
+      await expect((c.fn as unknown as Call)(c.input, undefined)).rejects.toThrow(GUEST_BUDGET_MSG);
+      expect(globalRpc).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      await (getPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, context);
+      expect(fetchMock).toHaveBeenCalled();
+      expect(userRpc.mock.calls.at(-1)?.[0]).toMatchObject({ _user: context.userId, _bucket: "details" });
+    });
+  }
+  it.each([
+    { data: null, error: { message: "down" } },
+    { data: "true", error: null },
+  ])("visitor quota errors deny before any global reservation", async (reply) => {
+    userRpc.mockImplementation(async (a: { _bucket: string }) => a._bucket.endsWith("_day") ? reply : { data: true, error: null });
+    await expect((getGuestPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, undefined)).rejects.toThrow(RATE_UNAVAILABLE_MSG);
+    expect(globalRpc).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("visitor photo quota failure omits photos but preserves details", async () => {
+    gatewayReply({ id: PLACE_ID, photos: [photo(901), photo(902)] });
+    userRpc.mockImplementation(async (a: { _bucket: string }) => ({ data: a._bucket !== "guest_photo_day", error: null }));
+    const out = await (getGuestPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, undefined) as { id: string; photos: unknown[] };
+    expect(out.id).toBe(PLACE_ID);
+    expect(out.photos).toEqual([]);
+    expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(0);
+    expect(globalRpc.mock.calls.some(c => c[0]._bucket === "photo")).toBe(false);
+  });
+  it("cached visitor photos remain free even when quota is exhausted", async () => {
+    gatewayReply({ id: PLACE_ID, photos: [photo(951)] });
+    await (getGuestPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, undefined);
+    userRpc.mockClear(); globalRpc.mockClear(); fetchMock.mockClear();
+    userRpc.mockImplementation(async (a: { _bucket: string }) => ({ data: !a._bucket.startsWith("guest_photo_"), error: null }));
+    const out = await (getGuestPlaceDetails as unknown as Call)({ placeId: PLACE_ID }, undefined) as { photos: unknown[] };
+    expect(out.photos).toHaveLength(1);
+    expect(userRpc.mock.calls.some(c => c[0]._bucket.startsWith("guest_photo_"))).toBe(false);
+    expect(fetchMock.mock.calls.filter(isPhotoCall)).toHaveLength(0);
   });
 });
