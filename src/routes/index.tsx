@@ -22,7 +22,7 @@ import { BooksPanel } from "@/components/cevai/BooksPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { SharedExperiencePhoto } from "@/components/cevai/SharedExperiencePhoto";
-import { distanceKm, formatKm } from "@/lib/geo-format";
+import { distanceKm, formatKm, shouldRecenter } from "@/lib/geo-format";
 import { saveExperiencePhoto } from "@/lib/experience-photo";
 import { deleteExperience } from "@/lib/delete-experience";
 import { MAX_EXPERIENCE_PHOTOS, selectExperiencePhotos } from "@/lib/experience-photo-selection";
@@ -178,8 +178,6 @@ function BottomNav({ active, onNavigate, onAdd }: { active: MainScreen; onNaviga
 }
 
 const GEO_WAIT_MS = 3000;
-/** Explorar searches again only when the center moved more than ~1 km. */
-export function shouldRecenter(prev: LatLng, next: LatLng) { return distanceKm(prev, next) > 1; }
 
 /* ---------------- Onboarding & auth ---------------- */
 
