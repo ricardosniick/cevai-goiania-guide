@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import type { User } from "@supabase/supabase-js";
 import { searchGuestPlaces, searchPlaces } from "@/lib/places.functions";
 import type { LatLng } from "@/components/cevai/types";
+import { getGuestChallengeToken } from "@/lib/guest-challenge.browser";
 
 export function usePlaces(user: User | null, center: LatLng, category: string | null, query: string, radius?: number, ready = true, opts: { withPhotos?: boolean; rank?: "distance" | "popularity"; maxRadius?: number } = {}) {
   const withPhotos = opts.withPhotos ?? true; const rank = opts.rank ?? "popularity";
@@ -12,9 +13,13 @@ export function usePlaces(user: User | null, center: LatLng, category: string | 
   const r = radius ? Math.min(25000, Math.max(300, Math.round(Math.min(radius, opts.maxRadius ?? 25000) / 500) * 500)) : undefined;
   return useQuery({
     queryKey: ["places", user ? "member" : "guest", category, query, lat, lng, r ?? null, withPhotos, rank],
-    queryFn: () => search({ data: { query: query || undefined, category: category ?? undefined, lat, lng, ...(r ? { radius: r } : {}), ...(withPhotos ? {} : { withPhotos: false }), ...(rank === "distance" ? { rank } : {}) } }),
+    queryFn: async ({ signal }) => {
+      const turnstileToken = user ? undefined : await getGuestChallengeToken(signal);
+      return search({ data: { query: query || undefined, category: category ?? undefined, lat, lng, ...(r ? { radius: r } : {}), ...(withPhotos ? {} : { withPhotos: false }), ...(rank === "distance" ? { rank } : {}), ...(turnstileToken ? { turnstileToken } : {}) } });
+    },
     enabled: ready,
     staleTime: 10 * 60 * 1000,
     retry: false,
   });
 }
+
