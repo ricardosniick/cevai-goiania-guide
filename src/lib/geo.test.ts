@@ -89,3 +89,12 @@ describe("expired coordinates (Google 30-day cache rule)", () => {
     expect(hasCoords({ lat: -16.68, lng: -49.25 })).toBe(true);
   });
 });
+
+describe("Explorar recenter rule", () => {
+  it("searches again only after moving more than ~1 km", async () => {
+    const { shouldRecenter } = await import("./geo-format");
+    const a = { lat: -16.68, lng: -49.25 };
+    expect(shouldRecenter(a, { lat: -16.685, lng: -49.25 })).toBe(false); // ~550 m
+    expect(shouldRecenter(a, { lat: -16.695, lng: -49.25 })).toBe(true); // ~1.7 km
+  });
+});
