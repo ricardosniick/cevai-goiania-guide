@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { effectiveRadius, isInsideArea } from "./geo";
 import { PHOTO_NEW_PER_MINUTE } from "./photo-budget";
+import { GUEST_BUDGET, GUEST_BUDGET_MSG, type GuestBucket } from "./guest-budget";
 import { GLOBAL_UNAVAILABLE_MSG, RATE_MSG, RATE_UNAVAILABLE_MSG, globalDecision, rateDecision, resolvePhotoBatch, type GlobalBucket, type RateDecision } from "./rate-limit";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -224,6 +225,15 @@ const searchSchema = z.object({
 // Visitors share server-owned buckets: no client identity, anonymous Auth account, or RLS grant.
 // A caller cannot reset this allowance by clearing storage or supplying another user ID.
 const GUEST_RATE_ID = "00000000-0000-0000-0000-000000000000";
+async function guestBudget(bucket: GuestBucket) {
+  const limits = GUEST_BUDGET[bucket];
+  await rateLimit(GUEST_RATE_ID, `guest_${bucket}_minute`, limits.minute, 60, GUEST_BUDGET_MSG);
+  await rateLimit(GUEST_RATE_ID, `guest_${bucket}_day`, limits.day, 86400, GUEST_BUDGET_MSG);
+}
+async function guestPhotoLimit(): Promise<RateDecision> {
+  try { await guestBudget("photo"); return "allow"; }
+  catch { return "unavailable"; } // A missing photo never prevents opening a place.
+}
 const detailSchema = z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) });
 
 async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: string, bucket: string, persist: boolean): Promise<PlaceSummary[]> {
@@ -233,6 +243,7 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
     let result: { places?: GPlace[] };
     const textQuery = data.query ? (filter.text ? `${filter.text} ${data.query}` : data.query) : filter.text;
     if (textQuery) {
+      if (!persist) await guestBudget("text_search");
       await requireGlobal("text_search");
       result = await gateway(`/places/v1/places:searchText`, {
         method: "POST",
@@ -247,6 +258,7 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
         }),
       });
     } else {
+      if (!persist) await guestBudget("nearby_search");
       await requireGlobal("nearby_search");
       result = await gateway(`/places/v1/places:searchNearby`, {
         method: "POST",
@@ -265,7 +277,7 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
     // Filtered searches (Destaques, categories, text) keep only places of active categories; dropped places get no photo calls and are not stored.
     const raw = RESTRICT_TEXT_TO_ACTIVE ? (result.places ?? []).filter((p) => isActivePlace(p.primaryType, p.types ?? [], p.displayName?.text ?? "", forced)) : (result.places ?? []);
     const kept = raw.slice(0, 20);
-    const urls = await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)));
+    const urls = await resolvePhotoKeys(kept.map((p) => validPhotoName(p.photos?.[0])).filter((n): n is string => !!n).map((n) => photoKey(n, 600)), persist ? undefined : guestPhotoLimit);
     const places = kept.map((p) => toSummary(p, urls, 600, forced));
     if (persist && places.length) {
       // Written server-side from Google data only; clients can no longer write `places`.
@@ -280,6 +292,7 @@ async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: strin
 
 async function placeDetailData(placeId: string, userId: string, bucket: string, persist: boolean): Promise<PlaceDetails> {
     await rateLimit(userId, bucket, 60, 60);
+    if (!persist) await guestBudget("details_full");
     await requireGlobal("details_full");
     const mask = "id,displayName,formattedAddress,shortFormattedAddress,location,primaryType,types,primaryTypeDisplayName,rating,userRatingCount,photos,editorialSummary,nationalPhoneNumber,websiteUri,googleMapsUri,regularOpeningHours.weekdayDescriptions";
     const place = await gateway<GPlace>(`/places/v1/places/${placeId}?languageCode=pt-BR`, { headers: headers(mask) });
@@ -287,7 +300,7 @@ async function placeDetailData(placeId: string, userId: string, bucket: string, 
     const cover = validPhotoName(place.photos?.[0]);
     const gallery = (place.photos ?? []).slice(0, 6);
     const keys = [...(cover ? [photoKey(cover, 1000)] : []), ...gallery.map(validPhotoName).filter((n): n is string => !!n).map((n) => photoKey(n, 800))];
-    const urls = await resolvePhotoKeys(keys);
+    const urls = await resolvePhotoKeys(keys, persist ? undefined : guestPhotoLimit);
     const summary = toSummary(place, urls, 1000);
     const photos = gallery.map((p) => {
       const n = validPhotoName(p);
