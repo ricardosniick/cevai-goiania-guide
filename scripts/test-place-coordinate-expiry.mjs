@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const { PGlite } = await import(process.env.PGLITE_MODULE || '@electric-sql/pglite');
 const db = new PGlite();
-const sql = await readFile(new URL('../drizzle/migrations/0020_clear_stale_place_coords.sql', import.meta.url), 'utf8');
+const sql = await readFile(new URL('../docs/sql/0020_clear_stale_place_coords_revisao.sql', import.meta.url), 'utf8');
 let passed = 0;
 const check = (name, actual, expected) => { assert.deepEqual(actual, expected, name); console.log(`OK ${++passed}: ${name}`); };
 const clean = async () => Number((await db.query('SELECT public.clear_stale_place_coords() AS cleaned')).rows[0].cleaned);

@@ -609,6 +609,7 @@ export type Database = {
         }[]
       }
       cleanup_presence: { Args: never; Returns: undefined }
+      clear_stale_place_coords: { Args: never; Returns: number }
       create_experience: {
         Args: {
           _category: string
