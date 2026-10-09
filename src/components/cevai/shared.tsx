@@ -64,7 +64,7 @@ export function ListError({ onRetry }: { onRetry: () => void }) {
 }
 
 export function Stars({ value, size = 14 }: { value: number; size?: number }) {
-  return <span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <Star key={n} size={size} className={n <= value ? "fill-secondary text-secondary" : "text-border"} />)}</span>;
+  return <span className="flex gap-0.5">{[1, 2, 3, 4, 5].map((n) => <Star key={n} size={size} className={n <= value ? "fill-secondary text-secondary" : "text-muted-foreground/60"} />)}</span>;
 }
 
 export function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
