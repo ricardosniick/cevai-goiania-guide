@@ -24,7 +24,31 @@ O widget usa `appearance: interaction-only`; aparece quando a Cloudflare pede in
 - Rodar `npm test`, `npx tsc --noEmit` e `npm run build`. Inspecionar os arquivos públicos gerados para garantir que não contêm a chave secreta nem a implementação do Siteverify.
 - Depois de publicação validada, executar novo deep scan e revisar os detalhes: o endpoint continua público por decisão de produto. Não registrar automaticamente como ignorado e não prometer que a etiqueta desaparecerá.
 
-## Limites da proteção
+## Diagnóstico de recusas
+
+O servidor acrescenta uma referência fixa `[TSxx]` à mensagem de recusa e registra somente a classificação correspondente. Não registra tokens, segredos, a lista de domínios, respostas brutas nem exceções do provedor. A referência aparece na resposta da função mesmo quando o transporte retorna HTTP 200; não implica sucesso da verificação. O bloqueio continua obrigatório em todos os casos.
+
+| Referência | Causa |
+| --- | --- |
+| TS01 | Secret Key ausente no servidor que executa a requisição |
+| TS02 | Lista de hostnames ausente nesse servidor |
+| TS03 | Lista de hostnames com formato inválido (usar hostnames separados por vírgulas, sem protocolo/caminho) |
+| TS04 | Token ausente ou com formato inválido |
+| TS05 | Siteverify respondeu com falha HTTP |
+| TS06 | Falha de rede ou timeout ao acessar Siteverify |
+| TS07 | Siteverify não devolveu JSON válido |
+| TS08 | Resposta do provedor não tem o formato esperado |
+| TS09 | Cloudflare recusou a Secret Key |
+| TS10 | Cloudflare recusou token expirado ou já utilizado |
+| TS11 | Cloudflare recusou o token enviado |
+| TS12 | Outra recusa do provedor |
+| TS13 | Ação do token diferente de `guest_places` |
+| TS14 | Hostname do token não está na lista configurada no servidor |
+| TS15 | Data do token ausente, inválida ou fora do prazo |
+
+Essa mudança permite identificar a causa de uma tentativa real; não prova que qualquer configuração específica está incorreta. Depois de atualizar a versão executada no Draft 1, repetir a tentativa e ler a referência na resposta da função. Alterações no PR não atualizam necessariamente uma cópia de rascunho já criada. Não publicar antes de testar sucesso real em busca e detalhes.
+
+## Risco residual
 
 Turnstile reduz abuso automatizado; não torna visitante uma conta nem elimina todos os robôs. Visitantes legítimos ainda consomem a cota compartilhada, limitada pelos tetos existentes. Ataques à disponibilidade do servidor precisam de controles na hospedagem; esta mudança protege a saída paga ao Google. Testes locais simulam Cloudflare, banco e Google; validação real do widget/domínios ainda é necessária.
 
