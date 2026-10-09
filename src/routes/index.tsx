@@ -28,7 +28,7 @@ import { deleteExperience } from "@/lib/delete-experience";
 import { MAX_EXPERIENCE_PHOTOS, selectExperiencePhotos } from "@/lib/experience-photo-selection";
 import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
-import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor } from "@/components/cevai/InstallPrompt";
@@ -371,6 +371,8 @@ function PlaceRow({ place, center, stat, showCommunity = true, onOpen }: { place
 
 /* ---------------- Mapa ---------------- */
 
+const MAP_MAX_RADIUS_M = 3000;
+
 function MapScreen({ user, center, location, category, onCategory, onLocate, onOpen, onLogin }: { user: User | null; center: LatLng; location: LatLng | null; category: string | null; onCategory: (c: string | null) => void; onLocate: () => void; onOpen: (id: string) => void; onLogin: () => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -379,13 +381,16 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
   const [view, setView] = useState<MapArea | null>(null);
   useEffect(() => { setArea(null); }, [center.lat, center.lng]);
   const onIdle = useCallback((a: MapArea) => { setView(a); setArea((prev) => prev ?? a); }, []);
-  const places = usePlaces(user, area ?? center, category, query, area?.radius, !!area || !!query); // wait for the map's final viewport: one Google call per opening
+  const places = usePlaces(user, area ?? center, category, query, area?.radius, !!area || !!query, { withPhotos: false, rank: "distance", maxRadius: MAP_MAX_RADIUS_M }); // wait for the map's final viewport: one Google call per opening
   const moved = !!(area && view) && (distanceKm(area, view) * 1000 > area.radius * 0.35 || view.radius > area.radius * 1.6 || view.radius < area.radius / 1.6);
   const sits = useSituations(user, (places.data ?? []).map((p) => p.id));
   const markers = useMemo<MapMarker[]>(() => (places.data ?? []).map((p) => { const st = sits.data?.[p.id]?.situations; return { id: p.id, lat: p.lat, lng: p.lng, category: p.category, label: st?.length ? `${p.name} · ${st[0]}` : p.name, badge: st?.[0]?.split(" ")[0] }; }), [places.data, sits.data]);
   const current = places.data?.find((p) => p.id === selected) ?? null;
   const curSit = current ? sits.data?.[current.id] : undefined;
   const stats = usePlaceStats(user, current ? [current.id] : []);
+  // Map searches skip photos; only the tapped place's photo is fetched (one call, server cache reused). Visitors keep "sem foto".
+  const pinPhoto = useQuery({ queryKey: ["pin-photo", current?.photoName], enabled: !!user && !!current?.photoName, staleTime: 20 * 60 * 1000, retry: false,
+    queryFn: async () => (await resolvePlacePhotos({ data: { names: [current!.photoName!] } }))[current!.photoName!] ?? null });
   return <section className="relative h-full">
     <MapView center={center} user={location} markers={markers} selectedId={selected} onSelect={setSelected} onIdle={onIdle} cluster fit={!!query} className="absolute inset-0" />
     {moved && !places.isFetching && !current && <button onClick={() => { setSelected(null); setArea(view); }} className="absolute left-1/2 top-[calc(max(1rem,env(safe-area-inset-top))+7.5rem)] z-20 -translate-x-1/2 animate-tab-in rounded-full bg-primary px-5 py-2.5 text-sm font-extrabold text-primary-foreground shadow-lg">🔎 Buscar nesta área</button>}
@@ -402,7 +407,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
     {places.isError && <div className="absolute inset-x-0 bottom-4 z-10"><ErrorBox error={places.error} /></div>}
     {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
       <div className="flex gap-3 p-3">
-        <PlacePhoto src={current.photoUrl} alt={current.name} className="size-24 shrink-0 rounded-xl" />
+        <PlacePhoto src={current.photoUrl ?? pinPhoto.data ?? null} alt={current.name} className="size-24 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><Navigation size={11} className="mr-1 inline" />{formatKm(distanceKm(center, current))} · <GoogleRating rating={current.rating} /></p>{user && <CeVaiRating stat={stats.data?.[current.id]} />}{curSit?.situations?.length && curSit.updated_at ? <p className="mt-1 truncate text-[11px] font-bold text-secondary">📍 {curSit.situations.join(" · ")} · {updatedAgo(curSit.updated_at).replace("Atualizado ", "")}</p> : null}</div>
         <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
       </div>
