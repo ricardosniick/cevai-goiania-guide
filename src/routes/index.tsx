@@ -591,6 +591,7 @@ function SavedScreen({ user, onOpen, onLogin, onExplore, onRegister }: { user: U
     {!user ? <LoginPrompt onLogin={onLogin} text="Entre para guardar lugares que quer conhecer e seus favoritos." /> : <>
       <div className="mt-4 flex gap-2 px-5">{(Object.keys(LIST_LABELS) as SavedList[]).map((l) => <button key={l} onClick={() => setList(l)} className={`rounded-full px-4 py-2 text-sm font-bold ${list === l ? "bg-primary text-primary-foreground" : "bg-card text-foreground shadow-sm"}`}>{LIST_LABELS[l]}</button>)}</div>
       {saved.isError && <div className="mx-5 mt-5"><ListError onRetry={() => void saved.refetch()} /></div>}
+      {saved.isLoading && <div className="mt-6 grid grid-cols-2 gap-4 px-5"><Skeleton className="h-44" /><Skeleton className="h-44" /></div>}
       <div key={list} className="mt-6 grid grid-cols-2 gap-4 px-5">
         {items.map((s, index) => <button data-entry-index={index} key={s.place_id} onClick={() => onOpen(s.place_id)} className="place-surface overflow-hidden rounded-2xl bg-card text-left"><PlacePhoto src={s.place?.photo_url ?? null} alt={s.place?.name ?? ""} className="h-28 w-full" /><div className="p-3"><p className="text-[10px] font-extrabold text-secondary">{emojiOf(s.place?.category ?? "")} {s.place?.category}</p><p className="line-clamp-2 font-display text-sm font-black">{s.place?.name}</p></div></button>)}
       </div>

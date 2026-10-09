@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import type { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { colorOfLabel } from "@/lib/categories";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -54,6 +54,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
   const map = useRef<any>(null);
   const pins = useRef<any[]>([]);
   const clusterer = useRef<MarkerClusterer | null>(null);
+  const clustererClass = useRef<typeof MarkerClusterer | null>(null);
   const userPin = useRef<any>(null);
   const idleRef = useRef(onIdle);
   idleRef.current = onIdle;
@@ -62,8 +63,9 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
 
   useEffect(() => {
     let alive = true;
-    loadMaps().then(() => {
+    Promise.all([loadMaps(), import("@googlemaps/markerclusterer")]).then(([, module]) => {
       if (!alive || !el.current) return;
+      clustererClass.current = module.MarkerClusterer;
       const g = (window as any).google;
       map.current = new g.maps.Map(el.current, {
         center, zoom: 13, disableDefaultUI: true, zoomControl: false, clickableIcons: false, gestureHandling: "greedy",
@@ -100,8 +102,8 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
       return marker;
     });
     if (cluster) {
-      if (!clusterer.current) {
-        clusterer.current = new MarkerClusterer({
+      if (!clusterer.current && clustererClass.current) {
+        clusterer.current = new clustererClass.current({
           map: map.current,
           algorithmOptions: { maxZoom: 15, radius: 60 } as any,
           renderer: {

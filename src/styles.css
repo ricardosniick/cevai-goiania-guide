@@ -197,11 +197,12 @@ html {
 @utility animate-modal-in { animation: modal-in 240ms ease-out both; }
 
 /* Shared touch feedback; scale is independent of positioned controls' transforms. */
-.cevai-app :is(button, [role="button"], [role="menuitem"], a):not([data-central-add]) {
+.touch-feedback, .cevai-app :is(button, [role="button"], [role="menuitem"], a):not([data-central-add]) {
   transition-property: color, background-color, border-color, box-shadow, opacity, scale;
   transition-duration: 150ms;
   transition-timing-function: ease-out;
 }
+.touch-feedback:not(:disabled):not([aria-disabled="true"]):active,
 .cevai-app :is(button, [role="button"], [role="menuitem"], a):not([data-central-add]):not(:disabled):not([aria-disabled="true"]):active {
   scale: 0.97;
 }
@@ -254,7 +255,9 @@ html {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .cevai-app :is(button, [role="button"], [role="menuitem"], a):active,
+  .touch-feedback:active,
   [aria-current="page"] .nav-icon svg { scale: 1 !important; }
+  [data-central-add]:active { transform: none !important; }
   [data-entry-index] { animation: none !important; }
   .skeleton-shimmer::after { display: none; }
 }
