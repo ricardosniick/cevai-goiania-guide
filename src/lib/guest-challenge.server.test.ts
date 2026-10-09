@@ -4,13 +4,14 @@ import { GUEST_CHALLENGE_MSG } from "./guest-challenge";
 const request = vi.fn();
 const proof = () => ({ success: true, action: "guest_places", hostname: "app.example.test", challenge_ts: new Date().toISOString() });
 beforeEach(() => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
   request.mockReset();
   request.mockResolvedValue(new Response(JSON.stringify(proof())));
   vi.stubGlobal("fetch", request);
   vi.stubEnv("TURNSTILE_SECRET_KEY", "unit-test-secret");
   vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "app.example.test, preview.example.test");
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 describe("server-side guest proof", () => {
   it("verifies against the fixed provider with server-owned secret", async () => {
     await verifyGuestChallenge("fresh-proof");
@@ -57,5 +58,42 @@ describe("server-side guest proof", () => {
     await expect(verifyGuestChallenge("proof")).rejects.toThrow(GUEST_CHALLENGE_MSG);
     request.mockResolvedValueOnce(new Response("unavailable", { status: 503 }));
     await expect(verifyGuestChallenge("proof")).rejects.toThrow(GUEST_CHALLENGE_MSG);
+  });
+  it.each([
+    { variable: "TURNSTILE_SECRET_KEY", value: "", code: "TS01" },
+    { variable: "TURNSTILE_ALLOWED_HOSTNAMES", value: "", code: "TS02" },
+    { variable: "TURNSTILE_ALLOWED_HOSTNAMES", value: "https://app.example.test", code: "TS03" },
+  ])("identifies configuration failures without exposing values: $code", async ({ variable, value, code }) => {
+    vi.stubEnv(variable, value);
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow(`[${code}]`);
+    expect(request).not.toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("unit-test-secret");
+  });
+  it.each([
+    { body: { success: false, "error-codes": ["invalid-input-secret"] }, code: "TS09" },
+    { body: { success: false, "error-codes": ["timeout-or-duplicate"] }, code: "TS10" },
+    { body: { success: false, "error-codes": ["invalid-input-response"] }, code: "TS11" },
+    { body: { success: false, "error-codes": ["internal-error", "private-token"] }, code: "TS12" },
+    { body: { ...proof(), action: "unexpected" }, code: "TS13" },
+    { body: { ...proof(), hostname: "unapproved.example.test" }, code: "TS14" },
+    { body: { ...proof(), challenge_ts: "invalid" }, code: "TS15" },
+  ])("preserves the rejection reason without raw provider data: $code", async ({ body, code }) => {
+    request.mockResolvedValue(new Response(JSON.stringify(body)));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow(`[${code}]`);
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).not.toContain("private-token");
+    expect(logs).not.toContain("unit-test-secret");
+    expect(logs).not.toContain("unapproved.example.test");
+    expect(console.error).toHaveBeenCalledTimes(1);
+  });
+  it("distinguishes network, HTTP and malformed JSON failures", async () => {
+    request.mockRejectedValueOnce(new Error("network private-token"));
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS06]");
+    request.mockResolvedValueOnce(new Response("private-token", { status: 503 }));
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS05]");
+    request.mockResolvedValueOnce(new Response("private-token"));
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS07]");
+    expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
   });
 });
