@@ -28,7 +28,7 @@ import { deleteExperience } from "@/lib/delete-experience";
 import { MAX_EXPERIENCE_PHOTOS, selectExperiencePhotos } from "@/lib/experience-photo-selection";
 import { friendlyError, authErrorMessage } from "@/lib/errors";
 import { lovable } from "@/integrations/lovable";
-import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
+import { getPlaceDetails, getGuestPlaceDetails, ensurePlace, resolvePlacePhotos, GOIANIA, type PlaceSummary } from "@/lib/places.functions";
 import { MapView, type MapMarker, type MapArea } from "@/components/cevai/MapView";
 import { SituationPanel, useSituations, updatedAgo } from "@/components/cevai/SituationPanel";
 import { InstallPrompt, captureSharedLink, takePendingLink, shareUrlFor } from "@/components/cevai/InstallPrompt";
