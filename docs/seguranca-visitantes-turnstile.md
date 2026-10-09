@@ -35,7 +35,7 @@ O servidor acrescenta uma referência fixa `[TSxx]` à mensagem de recusa e regi
 | TS03 | Lista de hostnames com formato inválido (usar hostnames separados por vírgulas, sem protocolo/caminho) |
 | TS04 | Token ausente ou com formato inválido |
 | TS05 | Siteverify respondeu com falha HTTP |
-| TS06 | Falha de rede ou timeout ao acessar Siteverify |
+| TS06 | Falha de conexão não classificada ao acessar Siteverify |
 | TS07 | Siteverify não devolveu JSON válido |
 | TS08 | Resposta do provedor não tem o formato esperado |
 | TS09 | Cloudflare recusou a Secret Key |
@@ -45,6 +45,13 @@ O servidor acrescenta uma referência fixa `[TSxx]` à mensagem de recusa e regi
 | TS13 | Ação do token diferente de `guest_places` |
 | TS14 | Hostname do token não está na lista configurada no servidor |
 | TS15 | Data do token ausente, inválida ou fora do prazo |
+| TS16 | Prazo de 8 segundos esgotado ou timeout identificado pelo runtime |
+| TS17 | Falha de resolução DNS identificada pelo runtime |
+| TS18 | Falha de certificado TLS identificada pelo runtime |
+| TS19 | Acesso de rede negado identificado pelo runtime (EACCES/EPERM) |
+| TS20 | Runtime sem fetch ou AbortController |
+
+O prazo usa AbortController e um temporizador cancelado ao terminar, sem depender de AbortSignal.timeout. O prazo vale também para a leitura da resposta. Não há repetição automática nem mudança de teto: tokens continuam de uso único. Apenas nomes/códigos reconhecidos são classificados; exceções sem esses sinais continuam TS06, sem inferir a causa por texto. TS17–TS19 exigem verificar DNS, certificados ou regras de saída do ambiente que executa o Draft 1; testes locais em outra máquina não confirmam essa infraestrutura. Não ignorar validação TLS nem liberar chamadas pagas quando a rede falha.
 
 Essa mudança permite identificar a causa de uma tentativa real; não prova que qualquer configuração específica está incorreta. Depois de atualizar a versão executada no Draft 1, repetir a tentativa e ler a referência na resposta da função. Alterações no PR não atualizam necessariamente uma cópia de rascunho já criada. Não publicar antes de testar sucesso real em busca e detalhes.
 
