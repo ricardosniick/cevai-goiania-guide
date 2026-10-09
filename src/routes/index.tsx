@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ArrowLeft, Bookmark, Camera, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
+  ArrowLeft, Bookmark, Camera, Image as ImageIcon, Check, ChevronRight, Compass, Crosshair, Eye, EyeOff, Heart,
   Lock, LogOut, MoreVertical, Map as MapIcon, MapPin, Navigation, Plus, Search, Star, UserRound, X, ExternalLink, Phone, Clock,
   Share2, Loader2 } from "lucide-react";
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
