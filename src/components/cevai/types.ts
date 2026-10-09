@@ -12,6 +12,8 @@ export type Experience = {
   place: { name: string; address: string | null; lat: number | null; lng: number | null; photo_url: string | null } | null;
   scores: Array<{ criterion: string; score: number }>;
   photos: string[];
+  /** Shared files are downloaded with the current session, never signed for third parties. */
+  sharedPhotoPaths?: string[];
   photoItems: Array<{ path: string; url: string }>;
 };
 
