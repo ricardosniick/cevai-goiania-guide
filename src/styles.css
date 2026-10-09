@@ -61,6 +61,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --shadow-place: 0 2px 6px color-mix(in oklch, var(--foreground) 4%, transparent), 0 6px 18px color-mix(in oklch, var(--foreground) 5%, transparent);
 }
 
 :root {
@@ -195,8 +196,70 @@ html {
 @utility animate-toast-in { animation: toast-in 180ms ease-out both; }
 @utility animate-modal-in { animation: modal-in 240ms ease-out both; }
 
+/* Shared touch feedback; scale is independent of positioned controls' transforms. */
+.touch-feedback, .cevai-app :is(button, [role="button"], [role="menuitem"], a):not([data-central-add]) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.touch-feedback:not(:disabled):not([aria-disabled="true"]):active,
+.cevai-app :is(button, [role="button"], [role="menuitem"], a):not([data-central-add]):not(:disabled):not([aria-disabled="true"]):active {
+  scale: 0.97;
+}
+.nav-icon { position: relative; display: grid; place-items: center; }
+.nav-icon svg { transition: scale 200ms ease-out, stroke-width 200ms ease-out; }
+[aria-current="page"] .nav-icon svg { scale: 1.06; }
+.nav-indicator {
+  position: absolute;
+  bottom: -4px;
+  width: 12px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  opacity: 0;
+  scale: 0.4 1;
+  transition: opacity 200ms ease-out, scale 200ms ease-out;
+}
+[aria-current="page"] .nav-indicator { opacity: 1; scale: 1; }
+.place-surface { border-radius: var(--radius); box-shadow: var(--shadow-place); }
+@keyframes card-enter {
+  from { opacity: 0; translate: 0 8px; }
+  to { opacity: 1; translate: 0 0; }
+}
+[data-entry-index="0"], [data-entry-index="1"], [data-entry-index="2"], [data-entry-index="3"],
+[data-entry-index="4"], [data-entry-index="5"], [data-entry-index="6"], [data-entry-index="7"] {
+  animation: card-enter 280ms ease-out backwards;
+}
+[data-entry-index="1"] { animation-delay: 40ms; }
+[data-entry-index="2"] { animation-delay: 80ms; }
+[data-entry-index="3"] { animation-delay: 120ms; }
+[data-entry-index="4"] { animation-delay: 160ms; }
+[data-entry-index="5"] { animation-delay: 200ms; }
+[data-entry-index="6"] { animation-delay: 240ms; }
+[data-entry-index="7"] { animation-delay: 280ms; }
+.place-photo { transition: opacity 280ms ease-out; }
+.skeleton-shimmer { position: relative; overflow: hidden; isolation: isolate; }
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  translate: -100% 0;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in oklch, var(--card) 55%, transparent) 50%, transparent 80%);
+  animation: skeleton-shimmer 1800ms ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes skeleton-shimmer {
+  to { translate: 100% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .cevai-app :is(button, [role="button"], [role="menuitem"], a):active,
+  .touch-feedback:active,
+  [aria-current="page"] .nav-icon svg { scale: 1 !important; }
+  [data-central-add]:active { transform: none !important; }
+  [data-entry-index] { animation: none !important; }
+  .skeleton-shimmer::after { display: none; }
 }
 
 .map-pattern {

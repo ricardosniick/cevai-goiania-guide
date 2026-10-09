@@ -10,6 +10,8 @@
 <!-- LOVABLE:END -->
 
 - Keep the mobile experience as a single state-driven route; this preserves app-like transitions without unnecessary URL changes.
+- Keep presentation motion in shared CSS, with bounded data-index list staggering and reduced-motion overrides; why: consistent feedback without new libraries or changes to navigation/data flows.
+- Import the marker clustering implementation dynamically inside the map effect; why: avoid CommonJS named-export failures during SSR while preserving client map behavior.
 - Store experiences, photos and saved places in the backend per user (private by default); real place data comes only from Google Places via authenticated server functions — never fabricate places or use AI images for real venues.
 - Category taxonomy (groups, subcategories, Google types, criteria) lives in src/lib/categories.ts and is shared by client and server; why: one source for filters, labels and Places requests.
 - Presence is written only by the `startPresence` server function after verifying category and distance against Google place data; social reads/writes go through SECURITY DEFINER RPCs that call `cleanup_presence()`. Why: clients can't fake check-ins and chats vanish with presence.

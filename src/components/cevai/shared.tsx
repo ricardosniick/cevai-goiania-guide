@@ -1,5 +1,5 @@
 import { useState, type InputHTMLAttributes } from "react";
-import { ArrowLeft, ChevronRight, Heart, Image as ImageIcon, Lock, Star } from "lucide-react";
+import { ArrowLeft, ChevronRight, Heart, Image as ImageIcon, Lock, Star, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ACTIVE_GROUPS, activeSubs, filterLabel, filterEmoji } from "@/lib/categories";
 import type { PlaceStat } from "@/components/cevai/types";
@@ -39,11 +39,21 @@ export function CategoriesScreen({ value, onBack, onPick }: { value: string | nu
 export function PlacePhoto({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
   // Old stored Google URLs expire: on load failure fall back to the existing "sem foto" look.
   const [broken, setBroken] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<string | null>(null);
   if (src && broken === src) src = null;
-  return src ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(src)} className={`object-cover ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
+  return src ? <img key={src} ref={(image) => { if (image?.complete && image.naturalWidth > 0) setLoaded(src); }} src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" onLoad={() => setLoaded(src)} onError={() => setBroken(src)} className={`place-photo object-cover ${loaded === src ? "opacity-100" : "opacity-0"} ${className}`} /> : <div className={`grid place-items-center bg-muted text-muted-foreground ${className}`}><ImageIcon size={28} /></div>;
 }
 
-export function Skeleton({ className }: { className: string }) { return <div className={`animate-pulse rounded-2xl bg-muted ${className}`} />; }
+export function Skeleton({ className }: { className: string }) { return <div className={`skeleton-shimmer rounded-2xl bg-muted ${className}`} />; }
+
+export function EmptyState({ icon: Icon, title, text, action, onAction }: { icon: LucideIcon; title: string; text: string; action: string; onAction: () => void }) {
+  return <div className="flex flex-col items-center px-4 py-8 text-center">
+    <div className="grid size-20 place-items-center rounded-full bg-muted text-primary"><Icon size={36} strokeWidth={1.6} aria-hidden="true" /></div>
+    <p className="mt-5 font-display text-lg font-black">{title}</p>
+    <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">{text}</p>
+    <Button onClick={onAction} className="mt-5 h-11 rounded-full px-5 font-extrabold">{action}<ChevronRight size={16} /></Button>
+  </div>;
+}
 
 export function ErrorBox({ error }: { error: unknown }) {
   return <div className="mx-5 mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error instanceof Error ? error.message : "Não foi possível carregar os lugares."}</div>;

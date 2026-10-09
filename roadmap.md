@@ -1,5 +1,11 @@
 # Roadmap
 
+## Acabamento visual
+- [x] Uniformizar resposta ao toque e indicador da navegação, preservando o botão central.
+- [x] Suavizar entradas de listas, fotos e carregamento com redução de movimento.
+- [x] Ajustar espaçamento, sombras e telas vazias com ações conectadas.
+- [x] Executar testes e conferir a prévia; verificar o resultado automático da compilação.
+
 ## Nome do app e emails de autenticação
 - [x] Usar “Cê vai” no logo em texto, títulos, metadados, compartilhamento, nome de instalação e README.
 - [ ] Nome do projeto no editor: alterar manualmente nas configurações do projeto; não há ação de renomeação disponível nesta sessão.
@@ -47,7 +53,7 @@
 - [x] 7B-4 BooksPanel.tsx, StallsPanel.tsx (+ Field, CeVaiRating, fmt1 em shared.tsx; PlaceStat em types.ts)
 - Continua no index.tsx: shell CeVaiApp + BottomNav, auth (Welcome/Login/Signup/Forgot/NewPassword), Explorar (HomeScreen, usePlaceStats, GoogleRating, PlaceRow), Mapa, Página do lugar (DetailScreen), ExperienceCard/Menu, Salvos, Perfil, ExperienceModal.
 - [ ] Pausado (só retomar se o usuário pedir): 7B-5 auth · 7B-6 Explorar/Mapa · 7B-7 cards · 7B-8a/b/c · 7B-9 modal · 7B-10 shell · distanceKm via geo.ts · 7C Prettier
-- [ ] Separado: aviso do markerclusterer no servidor de desenvolvimento (só preview).
+- [x] Separado: aviso do markerclusterer no servidor de desenvolvimento (só preview); importação adiada e prévia sem erro.
 
 ## Parte social — DESATIVADA nesta versão
 - [x] Interface removida: "Estou aqui", pessoas no local, conexões, chat, bloqueio/denúncia de pessoas; linha "pessoas aqui agora" da Situação.
