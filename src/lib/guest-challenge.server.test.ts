@@ -89,11 +89,15 @@ describe("server-side guest proof", () => {
   });
   it("distinguishes network, HTTP and malformed JSON failures", async () => {
     request.mockRejectedValueOnce(new Error("network private-token"));
-    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS06]");
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS06]");
     request.mockResolvedValueOnce(new Response("private-token", { status: 503 }));
-    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS05]");
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS05]");
     request.mockResolvedValueOnce(new Response("private-token"));
-    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS07]");
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS07]");
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).toContain("siteverify_fetch");
+    expect(logs).toContain("network [redacted]");
+    expect(logs).toContain('\\"status\\":503');
     expect(JSON.stringify(vi.mocked(console.error).mock.calls)).not.toContain("private-token");
   });
   it.each([
