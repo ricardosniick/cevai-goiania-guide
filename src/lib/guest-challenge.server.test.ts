@@ -19,7 +19,7 @@ describe("server-side guest proof", () => {
     expect(url).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
     expect(options.body.get("response")).toBe("fresh-proof");
     expect(options.body.get("secret")).toBe("unit-test-secret");
-    expect(options.redirect).toBe("error");
+    expect(options.redirect).toBe("manual");
   });
   it.each([undefined, null, "", " ", 1, "a".repeat(2049)])("rejects missing/malformed token %s locally", async token => {
     await expect(verifyGuestChallenge(token)).rejects.toThrow(GUEST_CHALLENGE_MSG);
@@ -50,6 +50,14 @@ describe("server-side guest proof", () => {
     await verifyGuestChallenge("one-use-token");
     await expect(verifyGuestChallenge("one-use-token")).rejects.toThrow(GUEST_CHALLENGE_MSG);
     expect(request).toHaveBeenCalledTimes(2);
+  });
+  it.each([301, 302, 307, 308])("rejects HTTP %s redirect without following it", async status => {
+    request.mockResolvedValueOnce(new Response(null, { status }));
+    await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS05]");
+    expect(request).toHaveBeenCalledTimes(1);
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).toContain("siteverify_redirect");
+    expect(logs).toContain(`\\"status\\":${status}`);
   });
   it("blocks provider outage, bad JSON and HTTP failure", async () => {
     request.mockRejectedValueOnce(new Error("timeout"));
