@@ -73,11 +73,13 @@ async function siteverify(secret: string, token: string): Promise<unknown> {
     let response: Response;
     try {
       response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-        method: "POST", redirect: "error", signal: controller.signal,
+        method: "POST", redirect: "manual", signal: controller.signal,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ secret, response: token }),
       });
     } catch (error) { deny(transportFailure(error, timedOut), { stage: "siteverify_fetch", error }); }
+    // Never follow redirects: any 3xx is rejected outright.
+    if (response.status >= 300 && response.status < 400) deny("TS05", { stage: "siteverify_redirect", status: response.status });
     if (!response.ok) deny("TS05", { stage: "siteverify_http", status: response.status });
     try { return await response.json(); }
     catch (error) {
