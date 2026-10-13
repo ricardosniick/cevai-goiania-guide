@@ -80,7 +80,13 @@ async function siteverify(secret: string, token: string): Promise<unknown> {
     } catch (error) { deny(transportFailure(error, timedOut), { stage: "siteverify_fetch", error }); }
     // Never follow redirects: any 3xx is rejected outright.
     if (response.status >= 300 && response.status < 400) deny("TS05", { stage: "siteverify_redirect", status: response.status });
-    if (!response.ok) deny("TS05", { stage: "siteverify_http", status: response.status });
+    if (!response.ok) {
+      // On HTTP errors, still try to read the provider JSON to log only success/error-codes.
+      let body: unknown;
+      try { body = await response.json(); }
+      catch { deny("TS05", { stage: "siteverify_http", status: response.status, provider: "no_valid_json" }); }
+      deny("TS05", { stage: "siteverify_http", status: response.status, provider: body });
+    }
     try { return await response.json(); }
     catch (error) {
       if (error instanceof SyntaxError) deny("TS07", { stage: "siteverify_json", error, status: response.status });
