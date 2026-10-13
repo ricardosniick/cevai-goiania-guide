@@ -59,6 +59,24 @@ describe("server-side guest proof", () => {
     expect(logs).toContain("siteverify_redirect");
     expect(logs).toContain(`\\"status\\":${status}`);
   });
+  it("reads provider JSON on HTTP errors, logging only status, success and error-codes", async () => {
+    request.mockResolvedValueOnce(new Response(JSON.stringify({ success: false, "error-codes": ["bad-request"], secret: "hidden" }), { status: 400 }));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS05]");
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).toContain("siteverify_http");
+    expect(logs).toContain('\\"status\\":400');
+    expect(logs).toContain("bad-request");
+    expect(logs).not.toContain("hidden");
+    expect(logs).not.toContain("private-token");
+  });
+  it("logs only the absence of valid JSON on HTTP errors, never the raw body", async () => {
+    request.mockResolvedValueOnce(new Response("private-token raw body", { status: 400 }));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS05]");
+    const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logs).toContain("no_valid_json");
+    expect(logs).not.toContain("raw body");
+    expect(logs).not.toContain("private-token");
+  });
   it("blocks provider outage, bad JSON and HTTP failure", async () => {
     request.mockRejectedValueOnce(new Error("timeout"));
     await expect(verifyGuestChallenge("proof")).rejects.toThrow(GUEST_CHALLENGE_MSG);
