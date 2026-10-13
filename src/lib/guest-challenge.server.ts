@@ -11,7 +11,7 @@ const REASONS: Record<FailureCode, string> = {
   TS19: "provider_network_denied", TS20: "unsupported_server_runtime",
 };
 
-type Detail = { stage: string; error?: unknown; status?: number; provider?: unknown };
+type Detail = { stage: string; error?: unknown; status?: number; provider?: unknown; hostname?: unknown; allowedHostnames?: string[] };
 // Values removed from every logged string (secret and current token).
 const sensitive: string[] = [];
 function redact(text: string): string {
@@ -35,13 +35,18 @@ function providerSummary(body: unknown) {
 
 function deny(code: FailureCode, detail?: Detail): never {
   // Logs stage, exception name/message (redacted), HTTP status and only success/error-codes.
-  // Never logs secret, token, headers, request body or hostname list.
+  // Never logs secret, token, headers or request body. Temporary TS14 hostname diagnostics.
   const log: Record<string, unknown> = { reason: REASONS[code] };
   if (detail) {
     log["stage"] = detail.stage;
     if (detail.error !== undefined) log["error"] = describeError(detail.error);
     if (detail.status !== undefined) log["status"] = detail.status;
     if (detail.provider !== undefined) log["provider"] = providerSummary(detail.provider);
+    // TEMPORARY: remove after diagnosing the preview allowlist mismatch.
+    if (code === "TS14") {
+      log["hostname"] = typeof detail.hostname === "string" ? redact(detail.hostname) : null;
+      log["allowedHostnames"] = detail.allowedHostnames?.map(redact);
+    }
   }
   console.error("[guest-challenge]", code, JSON.stringify(log));
   throw new Error(`${GUEST_CHALLENGE_MSG} [${code}]`);
@@ -119,7 +124,7 @@ export async function verifyGuestChallenge(token: unknown): Promise<void> {
     deny("TS12", d);
   }
   if (proof["action"] !== GUEST_CHALLENGE_ACTION) deny("TS13", { stage: "claims", status: 200, provider: proof });
-  if (typeof proof["hostname"] !== "string" || !hosts.includes(proof["hostname"].toLowerCase())) deny("TS14", { stage: "claims", status: 200, provider: proof });
+  if (typeof proof["hostname"] !== "string" || !hosts.includes(proof["hostname"].toLowerCase())) deny("TS14", { stage: "claims", status: 200, provider: proof, hostname: proof["hostname"], allowedHostnames: hosts });
   const timestamp = typeof proof["challenge_ts"] === "string" ? Date.parse(proof["challenge_ts"]) : NaN;
   const age = Date.now() - timestamp;
   if (!Number.isFinite(age) || age < -30000 || age > 300000) deny("TS15", { stage: "claims", status: 200, provider: proof });
