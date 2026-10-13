@@ -191,8 +191,27 @@ function EnteringScreen() {
 
 function WelcomeScreen({ ready, onSignup, onLogin, onExplore }: { ready: boolean; onSignup: () => void; onLogin: () => void; onExplore: () => void }) {
   const [artLoaded, setArtLoaded] = useState(false);
+  const [pinSkyLoaded, setPinSkyLoaded] = useState(false);
   return <section className="relative h-full overflow-hidden bg-primary">
-    <img src={welcomeArt.url} onLoad={() => setArtLoaded(true)} className={`absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]${artLoaded ? " welcome-art-enter" : ""}`} alt="Cê vai — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
+    <img src={welcomeArt.url} onLoad={() => setArtLoaded(true)} className="absolute inset-x-0 top-0 h-auto min-h-[55%] w-full object-cover object-top [mask-image:linear-gradient(to_bottom,black_78%,transparent)]" alt="Cê vai — O mapa das suas escolhas. Parque em Goiânia ao entardecer" />
+    <svg viewBox="0 0 390 390" aria-hidden="true" focusable="false" className={`welcome-pin-overlay${artLoaded && pinSkyLoaded ? " welcome-pin-ready" : ""}`}>
+      <defs>
+        <radialGradient id="welcome-sky-feather">
+          <stop offset="90%" stopColor="white" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </radialGradient>
+        <mask id="welcome-sky-mask" maskUnits="userSpaceOnUse" x="167" y="211" width="56" height="66">
+          <ellipse cx="195" cy="244" rx="28" ry="33" fill="url(#welcome-sky-feather)" />
+        </mask>
+      </defs>
+      <image href="/welcome-sky-patch.png" x="167" y="211" width="56" height="66" mask="url(#welcome-sky-mask)" onLoad={() => setPinSkyLoaded(true)} />
+      <g transform="translate(179 217)">
+        <g className="welcome-pin">
+          <path d="M5 7 2 3 M16 4V0 M27 7 30 3" fill="none" stroke="#123A32" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M16 12C8.82 12 3 17.82 3 25C3 34.75 16 47 16 47S29 34.75 29 25C29 17.82 23.18 12 16 12ZM16 20.5A4.5 4.5 0 1 1 16 29.5A4.5 4.5 0 1 1 16 20.5Z" fill="#F65C03" fillRule="evenodd" />
+        </g>
+      </g>
+    </svg>
     <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-primary via-primary/80 to-transparent" />
     <div className="relative z-10 flex h-full flex-col justify-end px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
       <div className="space-y-3">

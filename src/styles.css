@@ -255,20 +255,26 @@ html {
   to { translate: 100% 0; }
 }
 
-/* Play once after the welcome artwork loads; navigation never waits for it. */
-.welcome-art-enter {
-  transform-origin: center top;
+/* Separate decorative pin: three gentle hops, then rest. */
+.welcome-pin-overlay {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: auto;
+  visibility: hidden;
   pointer-events: none;
-  animation: welcome-art-reveal 3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-@keyframes welcome-art-reveal {
-  from { transform: scale(1.025); opacity: 0.8; }
-  30% { opacity: 1; }
-  to { transform: scale(1); opacity: 1; }
+.welcome-pin-ready { visibility: visible; }
+.welcome-pin-ready .welcome-pin {
+  animation: welcome-pin-hop 1s ease-in-out 3;
+}
+@keyframes welcome-pin-hop {
+  0%, 70%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-art-enter { animation: none; transform: none; opacity: 1; }
+  .welcome-pin-ready .welcome-pin { animation: none; transform: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .cevai-app :is(button, [role="button"], [role="menuitem"], a):active,
   .touch-feedback:active,
