@@ -110,7 +110,8 @@ describe("server-side guest proof", () => {
     const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
     expect(logs).not.toContain("private-token");
     expect(logs).not.toContain("unit-test-secret");
-    expect(logs).not.toContain("unapproved.example.test");
+    if (code === "TS14") expect(logs).toContain("unapproved.example.test");
+    else expect(logs).not.toContain("unapproved.example.test");
     expect(console.error).toHaveBeenCalledTimes(1);
   });
   it("distinguishes network, HTTP and malformed JSON failures", async () => {
@@ -172,5 +173,35 @@ describe("server-side guest proof", () => {
     vi.stubGlobal("AbortController", undefined);
     await expect(verifyGuestChallenge("proof")).rejects.toThrow("[TS20]");
     expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("temporary TS14 hostname diagnostics", () => {
+  it("logs normalized allowlist and received hostname only on a denied hostname", async () => {
+    vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", " APP.EXAMPLE.TEST , preview.example.test ");
+    request.mockResolvedValue(new Response(JSON.stringify({ ...proof(), hostname: "another.example.test", secret: "unit-test-secret", token: "private-token" })));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS14]");
+    const log = JSON.parse(vi.mocked(console.error).mock.calls[0]![2] as string);
+    expect(log.hostname).toBe("another.example.test");
+    expect(log.allowedHostnames).toEqual(["app.example.test", "preview.example.test"]);
+    expect(JSON.stringify(log)).not.toContain("unit-test-secret");
+    expect(JSON.stringify(log)).not.toContain("private-token");
+  });
+  it("redacts credentials even if repeated in diagnostic hostname fields", async () => {
+    vi.stubEnv("TURNSTILE_ALLOWED_HOSTNAMES", "unit-test-secret.example.test");
+    request.mockResolvedValue(new Response(JSON.stringify({ ...proof(), hostname: "private-token.example.test" })));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS14]");
+    const log = JSON.parse(vi.mocked(console.error).mock.calls[0]![2] as string);
+    expect(log.hostname).toBe("[redacted].example.test");
+    expect(log.allowedHostnames).toEqual(["[redacted].example.test"]);
+  });
+  it("does not log hostnames for other rejection codes or successful checks", async () => {
+    await verifyGuestChallenge("private-token");
+    expect(console.error).not.toHaveBeenCalled();
+    request.mockResolvedValue(new Response(JSON.stringify({ ...proof(), action: "wrong" })));
+    await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS13]");
+    const log = JSON.parse(vi.mocked(console.error).mock.calls[0]![2] as string);
+    expect(log).not.toHaveProperty("hostname");
+    expect(log).not.toHaveProperty("allowedHostnames");
   });
 });
