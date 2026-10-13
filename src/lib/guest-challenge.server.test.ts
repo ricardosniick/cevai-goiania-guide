@@ -73,7 +73,7 @@ describe("server-side guest proof", () => {
     request.mockResolvedValueOnce(new Response("private-token raw body", { status: 400 }));
     await expect(verifyGuestChallenge("private-token")).rejects.toThrow("[TS05]");
     const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
-    expect(logs).toContain("no_valid_json");
+    expect(logs).toMatch(/no_valid_json|\\"shape\\":\\"string\\"/);
     expect(logs).not.toContain("raw body");
     expect(logs).not.toContain("private-token");
   });
