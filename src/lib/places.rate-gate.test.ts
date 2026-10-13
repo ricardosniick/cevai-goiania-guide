@@ -346,3 +346,35 @@ describe("Google refresh after coordinate cleanup", () => {
     expect(Number.isFinite(Date.parse((row as { coords_fetched_at: string }).coords_fetched_at))).toBe(true);
   });
 });
+
+
+describe("Google photo resource validation", () => {
+  it.each([
+    "places/ExamplePlace123?fields=*&a=/photos/ExamplePhoto123",
+    "places/ExamplePlace123/photos/..",
+    "places/../photos/ExamplePhoto123",
+    "places/ExamplePlace123/photos/ExamplePhoto123#fragment",
+    "places/ExamplePlace123/photos/ExamplePhoto123?extra=1",
+    "places/ExamplePlace123/photos/ExamplePhoto123&extra=1",
+    "places/ExamplePlace123/photos/%2e%2e",
+    "places/ExamplePlace123/photos/ExamplePhoto123\n",
+    "places/ExamplePlace123/photos/ExamplePhoto123\r",
+    "places/ExamplePlace123/photos/",
+    `places/${"x".repeat(301)}/photos/ExamplePhoto123`,
+    `places/ExamplePlace123/photos/${"x".repeat(2049)}`,
+  ])("rejects malformed photo resources before quotas and gateway: %s", async name => {
+    expect(() => (resolvePlacePhotos as unknown as Call)({ names: [name] }, context)).toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("preserves URL-safe resource paths and bills them as photos", async () => {
+    const name = "places/ChIJ-safe_ID123/photos/AZ-safe_photo_123";
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ photoUri: "https://example.test/photo" })));
+    const out = await (resolvePlacePhotos as unknown as Call)({ names: [name] }, context);
+    expect(out).toEqual({ [name]: "https://example.test/photo" });
+    const url = new URL(fetchMock.mock.calls[0]![0] as string);
+    expect(url.pathname).toBe(`/google_maps/places/v1/${name}/media`);
+    expect([...url.searchParams.keys()]).toEqual(["maxWidthPx", "skipHttpRedirect"]);
+    expect(globalRpc).toHaveBeenCalledWith({ _bucket: "photo", _requested: 1, _allow_partial: true });
+  });
+});
