@@ -473,6 +473,8 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
   const saved = useSaved(user);
   const stats = usePlaceStats(user, [placeId]);
   const [tab, setTab] = useState<"Sobre" | "Experiências" | "Fotos" | "Barraquinhas">("Sobre");
+  const [favoritePulse, setFavoritePulse] = useState({ scope: "", count: 0 });
+  const favoriteScope = `${user?.id ?? "guest"}:${placeId}`;
   const lists = new Set((saved.data ?? []).filter((s) => s.place_id === placeId).map((s) => s.list as SavedList));
 
   const toggle = async (list: SavedList) => {
@@ -483,6 +485,9 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
         : await supabase.from("saved_places").insert({ user_id: user.id, place_id: placeId, list });
       if (error) return notify(friendlyError(error, "Não foi possível salvar. Tente de novo.", "saved_places"));
     } catch (e) { return notify(friendlyError(e, "Não foi possível salvar. Tente de novo.", "saved_places")); }
+    if (list === "favoritos") {
+      setFavoritePulse((previous) => ({ scope: favoriteScope, count: lists.has(list) ? 0 : previous.count + 1 }));
+    }
     notify(lists.has(list) ? `Removido de “${LIST_LABELS[list]}”` : `Adicionado a “${LIST_LABELS[list]}”`);
     void queryClient.invalidateQueries({ queryKey: ["saved"] });
   };
@@ -541,7 +546,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
     </div>
     {p && <div className="flex shrink-0 gap-2 border-t border-border bg-card px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
       <Button variant="outline" onClick={() => void toggle("quero_conhecer")} className={`h-12 flex-1 rounded-full font-extrabold ${lists.has("quero_conhecer") ? "border-primary bg-primary/10 text-primary" : ""}`}><Bookmark size={18} className={lists.has("quero_conhecer") ? "fill-current" : ""} />Quero ir</Button>
-      <Button variant="outline" size="icon" aria-label="Favoritar" onClick={() => void toggle("favoritos")} className={`size-12 rounded-full ${lists.has("favoritos") ? "border-secondary text-secondary" : ""}`}><Heart size={20} className={lists.has("favoritos") ? "fill-current" : ""} /></Button>
+      <Button variant="outline" size="icon" aria-label="Favoritar" onClick={() => void toggle("favoritos")} className={`size-12 rounded-full ${lists.has("favoritos") ? "border-secondary text-secondary" : ""}`}><Heart key={`${favoriteScope}:${favoritePulse.count}`} size={20} className={`${lists.has("favoritos") ? "fill-current" : ""} ${favoritePulse.scope === favoriteScope && favoritePulse.count > 0 ? "favorite-heart-pulse" : ""}`} /></Button>
       <Button onClick={() => onRegister(p)} className="h-12 flex-[1.3] rounded-full bg-secondary font-extrabold text-secondary-foreground hover:bg-secondary/90"><Plus size={18} />Eu fui</Button>
     </div>}
   </section>;

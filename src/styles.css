@@ -273,8 +273,18 @@ html {
   40% { transform: translateY(-10px); }
 }
 
+/* A single pulse confirms a successfully added favorite. */
+.favorite-heart-pulse {
+  transform-origin: center;
+  animation: favorite-heart-pulse 300ms ease-out;
+}
+@keyframes favorite-heart-pulse {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.2); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .welcome-pin-ready .welcome-pin { animation: none; transform: none; }
+  .welcome-pin-ready .welcome-pin, .favorite-heart-pulse { animation: none; transform: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .cevai-app :is(button, [role="button"], [role="menuitem"], a):active,
   .touch-feedback:active,
