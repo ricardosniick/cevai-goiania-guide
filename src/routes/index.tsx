@@ -63,15 +63,17 @@ function CeVaiApp() {
   const [category, setCategory] = useState<string | null>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; place: PlaceSummary | null; stall?: Stall | null; edit?: Experience | null }>({ open: false, place: null });
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ message: string; experienceSaved: boolean; id: number } | null>(null);
+  const toastSequence = useRef(0);
   const toastTimer = useRef<number | undefined>(undefined);
   const queryClient = useQueryClient();
 
-  const notify = useCallback((m: string) => {
+  const notify = useCallback((m: string, experienceSaved = false) => {
     window.clearTimeout(toastTimer.current);
-    setToast(m);
-    toastTimer.current = window.setTimeout(() => setToast(""), 2400);
+    setToast({ message: m, experienceSaved, id: ++toastSequence.current });
+    toastTimer.current = window.setTimeout(() => setToast(null), experienceSaved ? 2500 : 2400);
   }, []);
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
   // Every screen opens at its real top: no browser scroll restoration, no leftover window/inner scroll.
   const screenRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; }, []);
@@ -158,9 +160,12 @@ function CeVaiApp() {
         </div>
         </ManageCtx.Provider>
         {main && <BottomNav active={screen as MainScreen} onNavigate={(s) => go(s)} onAdd={() => openModal(null)} />}
-        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} editing={modal.edit ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify(modal.edit ? "Experiência atualizada!" : "Experiência registrada!"); }} notify={notify} />}
+        {modal.open && user && <ExperienceModal user={user} center={center} location={location} initialPlace={modal.place} initialStall={modal.stall ?? null} editing={modal.edit ?? null} onLocate={() => locate(true)} onClose={() => setModal({ open: false, place: null })} onSaved={() => { setModal({ open: false, place: null }); void queryClient.invalidateQueries({ queryKey: ["experiences"] }); void queryClient.invalidateQueries({ queryKey: ["saved"] }); void queryClient.invalidateQueries({ queryKey: ["place-stats"] }); void queryClient.invalidateQueries({ queryKey: ["stall-stats"] }); notify(modal.edit ? "Experiência atualizada!" : "Experiência salva!", true); }} notify={notify} />}
         <InstallPrompt shared={shared} />
-        {toast && <div role="status" className="absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl"><Check size={16} className="shrink-0" />{toast}</div>}
+        {toast && <div key={toast.id} role="status" className="pointer-events-none absolute bottom-24 left-1/2 z-50 flex max-w-[90%] -translate-x-1/2 animate-toast-in items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-bold text-background shadow-xl">
+          {toast.experienceSaved ? <span aria-hidden="true" className="experience-saved-check grid size-8 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"><Check size={20} strokeWidth={3} /></span> : <Check size={16} aria-hidden="true" className="shrink-0" />}
+          {toast.message}
+        </div>}
       </div>
     </main>
   );

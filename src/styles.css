@@ -302,9 +302,18 @@ html {
   100% { opacity: 0; transform: translate(var(--heart-x), var(--heart-y)) scale(0.8); }
 }
 
+/* Success feedback never delays navigation or blocks interaction. */
+.experience-saved-check { animation: experience-saved-check 400ms ease-out both; }
+@keyframes experience-saved-check {
+  0% { transform: translateY(5px) scale(0.7); }
+  55% { transform: translateY(-4px) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .welcome-pin-ready .welcome-pin { animation: none; transform: none; }
   .favorite-heart-burst { display: none; }
+  .experience-saved-check { animation: none; transform: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .cevai-app :is(button, [role="button"], [role="menuitem"], a):active,
   .touch-feedback:active,
