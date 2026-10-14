@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MarkerClusterer } from "@googlemaps/markerclusterer";
 import { colorOfLabel } from "@/lib/categories";
+import { animateSelectedMarker } from "@/lib/map-marker-motion";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type MapMarker = { id: string; lat: number; lng: number; category: string; label: string; badge?: string | undefined };
@@ -56,6 +57,7 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
   const clusterer = useRef<MarkerClusterer | null>(null);
   const clustererClass = useRef<typeof MarkerClusterer | null>(null);
   const userPin = useRef<any>(null);
+  const lastSelected = useRef<string | null>(null);
   const idleRef = useRef(onIdle);
   idleRef.current = onIdle;
   const [ready, setReady] = useState(false);
@@ -92,12 +94,20 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
     clusterer.current?.clearMarkers();
     // Places whose coordinates expired (lat/lng null) are never drawn, so nothing lands at (0,0).
     markers = markers.filter(hasCoords);
+    const animateSelection = !!selectedId && lastSelected.current !== selectedId;
+    lastSelected.current = selectedId ?? null;
+    let stopSelectionMotion: (() => void) | undefined;
     pins.current = markers.map((m) => {
       const selected = m.id === selectedId;
       const marker = new g.maps.Marker({
         map: cluster ? null : map.current, position: { lat: m.lat, lng: m.lng }, title: m.label, label: m.badge ? { text: m.badge, fontSize: "13px" } : undefined, zIndex: selected ? 10 : 1,
         icon: { path: g.maps.SymbolPath.CIRCLE, scale: selected ? 13 : 9, fillColor: colorOfLabel(m.category), fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3 },
       });
+      if (selected && animateSelection) {
+        stopSelectionMotion = animateSelectedMarker((scale, lift) => {
+          marker.setIcon({ path: g.maps.SymbolPath.CIRCLE, scale, fillColor: colorOfLabel(m.category), fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 3, anchor: new g.maps.Point(0, lift / scale) });
+        });
+      }
       marker.addListener("click", () => onSelect?.(m.id));
       return marker;
     });
@@ -117,15 +127,15 @@ export function MapView({ center, user, markers, selectedId, onSelect, onIdle, c
       }
       clusterer.current?.addMarkers(pins.current);
     }
-    if (!fit) return;
-    if (markers.length > 1 && !selectedId) {
+    if (fit && markers.length > 1 && !selectedId) {
       const bounds = new g.maps.LatLngBounds();
       markers.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
       if (user) bounds.extend(user);
       map.current.fitBounds(bounds, 48);
-    } else if (markers.length === 1 && markers[0]) {
+    } else if (fit && markers.length === 1 && markers[0]) {
       map.current.setCenter({ lat: markers[0].lat, lng: markers[0].lng });
     }
+    return () => stopSelectionMotion?.();
   }, [ready, markers, selectedId, onSelect, user, cluster, fit]);
 
   // Viewport-driven maps: follow external center changes (e.g. "Minha localização").
