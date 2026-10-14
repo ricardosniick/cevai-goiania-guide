@@ -536,7 +536,7 @@ function DetailScreen({ placeId, user, center, onBack, onRegister, onLogin, noti
             <h2 className="font-display text-lg font-black">Experiências no Cê vai</h2>
             <p className="mt-1 text-xs text-muted-foreground">Suas experiências são privadas. Aqui aparecem as suas e as que outras pessoas escolheram compartilhar.</p>
             <div className="mt-4 space-y-3">
-              {experiences.data?.filter((e) => !e.stall_id).length ? experiences.data.filter((e) => !e.stall_id).map((e) => <ExperienceCard key={e.id} exp={e} own={e.user_id === user?.id} />) : <EmptyState icon={Heart} title="Ainda sem experiências" text="Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência." action="Registrar experiência" onAction={() => onRegister(p)} />}
+              {experiences.data?.filter((e) => !e.stall_id).length ? experiences.data.filter((e) => !e.stall_id).map((e, index) => <ExperienceCard entryIndex={index} key={e.id} exp={e} own={e.user_id === user?.id} />) : <EmptyState icon={Heart} title="Ainda sem experiências" text="Ninguém registrou este lugar ainda. Foi lá? Registre sua experiência." action="Registrar experiência" onAction={() => onRegister(p)} />}
             </div>
           </div>)}
           {tab === "Barraquinhas" && !user && <LoginPrompt onLogin={onLogin} text="Entre para conhecer as barraquinhas cadastradas pela comunidade." />}

@@ -30,7 +30,7 @@ export function StallsPanel({ place, user, onRegister, notify }: { place: PlaceS
     <h2 className="font-display text-lg font-black">Barraquinhas desta feira</h2>
     <p className="mt-1 text-xs text-muted-foreground">Cadastradas pela comunidade do Cê vai — não vêm do Google. Cada barraquinha tem suas próprias experiências, separadas da nota da feira.</p>
     <div className="mt-4 space-y-2">
-      {stalls.data?.map((st) => { const stat = stats.data?.[st.id]; return <div key={st.id} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm">
+      {stalls.data?.map((st, index) => { const stat = stats.data?.[st.id]; return <div data-entry-index={index} key={st.id} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm">
         <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-muted text-2xl">{st.emoji}</span>
         <div className="min-w-0 flex-1"><p className="truncate font-bold">{st.name}</p><p className="text-[10px] font-bold text-muted-foreground">{st.kind} · criado pela comunidade</p><CeVaiRating stat={stat} /></div>
         <Button size="sm" onClick={() => onRegister(st)} className="shrink-0 rounded-full bg-secondary text-xs font-extrabold text-secondary-foreground hover:bg-secondary/90">Eu fui</Button>
