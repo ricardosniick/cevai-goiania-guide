@@ -27,3 +27,4 @@
 - Every paid Google call (search, details, photos) reserves a slot via `reserve_global_budget` (bucket, amount, partial only for photos) after the per-user `hit_rate_limit`; ceilings live only in `global_api_limits` (server/DB-side), any non-grant blocks, cached photos skip reservation. Why: app-wide cost ceiling across server instances, fail-closed.
 
 - Guest discovery uses public searchGuestPlaces/getGuestPlaceDetails server functions for Google data only. All visitors share server-owned guest_search (30/min) and guest_details (60/min) buckets, followed by the existing global budget; no anonymous Auth accounts or RLS grants. These endpoints never persist places or read community/private data. Saved places, experiences and situations still require login.
+- The "Cê vai onde?" AI assistant (recommendPlaces) only lets Claude pick among real Google search results and drops any id not in that list (parsePicks); why: never fabricate places.
