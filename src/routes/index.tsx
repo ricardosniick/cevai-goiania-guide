@@ -154,7 +154,7 @@ function CeVaiApp() {
           {screen === "new-password" && <NewPasswordScreen onDone={() => go("home")} notify={notify} />}
           {screen === "home" && <HomeScreen user={user} center={center} geoReady={geoReady} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} onRegister={openModal} />}
           {screen === "categories" && <CategoriesScreen value={category} onBack={() => go("home", true)} onPick={(k) => { setCategory(k); go("home", true); }} />}
-          {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
+          {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} onRegister={openModal} />}
           {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} onLogin={() => go("login")} notify={notify} />}
           {screen === "saved" && <SavedScreen user={user} onOpen={(id) => openPlace(id, "saved")} onLogin={() => go("login")} onExplore={() => go("home")} onRegister={() => openModal(null)} />}
           {screen === "profile" && <ProfileScreen onRegister={() => openModal(null)} user={user} name={profileName} onOpen={(id) => openPlace(id, "profile")} onLogin={() => go("login")} onSignOut={async () => { await supabase.auth.signOut(); go("welcome", true); }} notify={notify} />}
@@ -394,7 +394,7 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
 // Destaques: reorder what was already loaded (no extra Google calls) — leisure first, shopping last.
 const HIGHLIGHT_PRIORITY = [/feira/i, /bar|boteco|pub|cervej/i, /restaurante|comer|churrasc|pizz|lanch/i, /quadra|esporte|t[eê]nis|academia|futebol|parque/i];
 function highlightRank(p: PlaceSummary) { const t = `${p.category} ${p.typeLabel ?? ""}`; if (/shopping|loja/i.test(t)) return 99; const i = HIGHLIGHT_PRIORITY.findIndex((r) => r.test(t)); return i < 0 ? 50 : i; }
-export function highlightOrder(list: PlaceSummary[]) { return list.map((p, i) => ({ p, i })).sort((a, b) => highlightRank(a.p) - highlightRank(b.p) || a.i - b.i).map((x) => x.p); }
+function highlightOrder(list: PlaceSummary[]) { return list.map((p, i) => ({ p, i })).sort((a, b) => highlightRank(a.p) - highlightRank(b.p) || a.i - b.i).map((x) => x.p); }
 
 function usePlaceStats(user: User | null, ids: string[]) {
   const key = [...ids].sort().join(",");
@@ -416,7 +416,7 @@ function GoogleRating({ rating, count, size = "sm" }: { rating: number | null; c
   return <span className="inline-flex items-center gap-1"><Star size={size === "md" ? 14 : 11} className="fill-secondary text-secondary" />{fmt1(rating)}<span className="rounded-sm bg-muted px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-muted-foreground">Google</span>{count ? <span className="font-semibold text-muted-foreground">({count})</span> : null}</span>;
 }
 
-function PlaceRow({ place, center, stat, showCommunity = true, onOpen, onInvite, entryIndex }: { onInvite?: () => void; entryIndex?: number; place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
+function PlaceRow({ place, center, stat, showCommunity = true, onOpen, onInvite, entryIndex }: { onInvite?: (() => void) | undefined; entryIndex?: number; place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
   return <button data-entry-index={entryIndex} onClick={onOpen} className="place-surface flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left">
     <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
     <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary-ink">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><DistanceText km={distanceKm(center, place)} prefix="· " /></p>{showCommunity && <CeVaiRating stat={stat} onInvite={onInvite} />}</div>
@@ -428,7 +428,7 @@ function PlaceRow({ place, center, stat, showCommunity = true, onOpen, onInvite,
 
 const MAP_MAX_RADIUS_M = 3000;
 
-function MapScreen({ user, center, location, category, onCategory, onLocate, onOpen, onLogin }: { user: User | null; center: LatLng; location: LatLng | null; category: string | null; onCategory: (c: string | null) => void; onLocate: () => void; onOpen: (id: string) => void; onLogin: () => void }) {
+function MapScreen({ user, center, location, category, onCategory, onLocate, onOpen, onLogin, onRegister }: { user: User | null; center: LatLng; location: LatLng | null; category: string | null; onCategory: (c: string | null) => void; onLocate: () => void; onOpen: (id: string) => void; onLogin: () => void; onRegister?: (p: PlaceSummary) => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   // `area` = region last searched; `view` = region currently on screen (updated when the user stops moving).
@@ -463,7 +463,7 @@ function MapScreen({ user, center, location, category, onCategory, onLocate, onO
     {current && <div className="absolute inset-x-4 bottom-4 z-20 animate-tab-in overflow-hidden rounded-2xl bg-card shadow-2xl">
       <div className="flex gap-3 p-3">
         <PlacePhoto src={current.photoUrl ?? pinPhoto.data ?? null} alt={current.name} className="size-24 shrink-0 rounded-xl" />
-        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><DistanceText km={distanceKm(center, current)} suffix=" · "><Navigation size={11} className="mr-1 inline" /></DistanceText><GoogleRating rating={current.rating} /></p>{user && <CeVaiRating stat={stats.data?.[current.id]} />}{curSit?.situations?.length && curSit.updated_at ? <p className="mt-1 truncate text-[11px] font-bold text-secondary-ink">📍 {curSit.situations.join(" · ")} · {updatedAgo(curSit.updated_at).replace("Atualizado ", "")}</p> : null}</div>
+        <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold" style={{ color: colorOfLabel(current.category) }}>{emojiOf(current.category)} {current.typeLabel || current.category}</p><p className="truncate font-display text-lg font-black">{current.name}</p><p className="line-clamp-2 text-xs text-muted-foreground">{current.address}</p><p className="mt-1 text-xs font-bold text-foreground/80"><DistanceText km={distanceKm(center, current)} suffix=" · "><Navigation size={11} className="mr-1 inline" /></DistanceText><GoogleRating rating={current.rating} /></p>{user && <CeVaiRating stat={stats.data?.[current.id]} onInvite={onRegister && (() => onRegister(current))} />}{curSit?.situations?.length && curSit.updated_at ? <p className="mt-1 truncate text-[11px] font-bold text-secondary-ink">📍 {curSit.situations.join(" · ")} · {updatedAgo(curSit.updated_at).replace("Atualizado ", "")}</p> : null}</div>
         <button aria-label="Fechar" onClick={() => setSelected(null)} className="self-start text-muted-foreground"><X size={18} /></button>
       </div>
       <div className="px-3 pb-3"><Button onClick={() => onOpen(current.id)} className="h-11 w-full rounded-full bg-primary font-extrabold text-primary-foreground">Ver lugar</Button></div>
