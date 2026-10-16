@@ -84,7 +84,7 @@ async function checkRate(userId: string, bucket: string, max: number, windowSeco
     return "unavailable";
   }
 }
-async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
+export async function rateLimit(userId: string, bucket: string, max: number, windowSeconds: number, message = RATE_MSG) {
   const d = await checkRate(userId, bucket, max, windowSeconds);
   if (d === "limited") throw new Error(message);
   if (d === "unavailable") throw new Error(RATE_UNAVAILABLE_MSG);
@@ -241,7 +241,7 @@ async function guestPhotoLimit(): Promise<RateDecision> {
 }
 const detailSchema = z.object({ placeId: z.string().regex(/^[A-Za-z0-9_-]{10,300}$/) });
 
-async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: string, bucket: string, persist: boolean): Promise<PlaceSummary[]> {
+export async function searchPlaceData(data: z.infer<typeof searchSchema>, userId: string, bucket: string, persist: boolean): Promise<PlaceSummary[]> {
     await rateLimit(userId, bucket, 30, 60);
     const t0 = Date.now(); const ms: Record<string, number> = {}; let t = t0;
     const lap = (k: string) => { const n = Date.now(); ms[k] = n - t; t = n; };

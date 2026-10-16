@@ -19,6 +19,7 @@ import { Logo } from "@/components/cevai/Logo";
 import { LoginPrompt, CategoryChips, CategoriesScreen, PlacePhoto, Skeleton, ErrorBox, ListError, Stars, Field, CeVaiRating, fmt1, EmptyState } from "@/components/cevai/shared";
 import { StallsPanel } from "@/components/cevai/StallsPanel";
 import { BooksPanel } from "@/components/cevai/BooksPanel";
+import { AssistantPanel } from "@/components/cevai/AssistantPanel";
 import { usePlaces } from "@/hooks/usePlaces";
 import { loadExperiences, useSaved } from "@/hooks/useExperiences";
 import { SharedExperiencePhoto } from "@/components/cevai/SharedExperiencePhoto";
@@ -373,6 +374,7 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
       {input && <button type="button" aria-label="Limpar busca" onClick={() => { setInput(""); setQuery(""); }}><X size={18} className="text-muted-foreground" /></button>}
     </form>
     <CategoryChips value={category} onChange={onCategory} chips={HOME_CHIPS} onAll={onAll} className="mt-4" />
+    {user && <AssistantPanel center={searchCenter ?? center} onOpen={onOpen} />}
     <>
       <div className="mt-8 flex items-center justify-between px-5"><h2 className="font-display text-xl font-black">{query ? `Resultados para “${query}”` : category ? `${filterEmoji(category)} ${filterLabel(category)} perto de você` : "Destaques da cidade"}</h2></div>
       {places.isError && <ErrorBox error={places.error} />}

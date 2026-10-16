@@ -15,6 +15,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   rpc: async () => ({ data: [], error: null }),
 } }));
 vi.mock("@/integrations/lovable", () => ({ lovable: { auth: { signInWithOAuth: m.oauth } } }));
+vi.mock("@/components/cevai/AssistantPanel", () => ({ AssistantPanel: () => null }));
 vi.mock("@/lib/places.functions", () => ({
   GOIANIA: { lat: -16.6869, lng: -49.2648 },
   searchGuestPlaces: m.search, getGuestPlaceDetails: vi.fn(), searchPlaces: m.memberSearch, getPlaceDetails: vi.fn(),

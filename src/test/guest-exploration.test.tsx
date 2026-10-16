@@ -17,6 +17,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: {
   from: mocks.from, rpc: mocks.rpc,
 } }));
 vi.mock("@/integrations/lovable", () => ({ lovable: {} }));
+vi.mock("@/components/cevai/AssistantPanel", () => ({ AssistantPanel: () => null }));
 vi.mock("@/lib/places.functions", () => ({
   GOIANIA: { lat: -16.6869, lng: -49.2648 },
   searchGuestPlaces: mocks.search, getGuestPlaceDetails: mocks.details,
