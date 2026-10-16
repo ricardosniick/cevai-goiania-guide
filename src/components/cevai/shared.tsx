@@ -72,7 +72,7 @@ export function Field({ label, ...props }: { label: string } & InputHTMLAttribut
 }
 
 export const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
-export function CeVaiRating({ stat, onInvite }: { stat?: PlaceStat | undefined; onInvite?: () => void }) {
+export function CeVaiRating({ stat, onInvite }: { stat?: PlaceStat | undefined; onInvite?: (() => void) | undefined }) {
   if (!stat?.count) return onInvite
     ? <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onInvite(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onInvite(); } }} className="inline-flex items-center gap-1 text-[11px] font-extrabold text-secondary-ink underline-offset-2 hover:underline">Seja o primeiro a avaliar</span>
     : <span className="text-[11px] font-semibold italic text-muted-foreground">Seja o primeiro a avaliar</span>;
