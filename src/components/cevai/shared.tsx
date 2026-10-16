@@ -72,7 +72,9 @@ export function Field({ label, ...props }: { label: string } & InputHTMLAttribut
 }
 
 export const fmt1 = (n: number) => n.toFixed(1).replace(".", ",");
-export function CeVaiRating({ stat }: { stat?: PlaceStat | undefined }) {
-  if (!stat?.count) return <span className="text-[11px] font-semibold italic text-muted-foreground">Ainda sem experiências no Cê vai</span>;
+export function CeVaiRating({ stat, onInvite }: { stat?: PlaceStat | undefined; onInvite?: () => void }) {
+  if (!stat?.count) return onInvite
+    ? <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onInvite(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onInvite(); } }} className="inline-flex items-center gap-1 text-[11px] font-extrabold text-secondary-ink underline-offset-2 hover:underline">Seja o primeiro a avaliar</span>
+    : <span className="text-[11px] font-semibold italic text-muted-foreground">Seja o primeiro a avaliar</span>;
   return <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-primary"><Heart size={11} className="fill-secondary text-secondary" />{fmt1(stat.avg)} · Cê vai · {stat.count} {stat.count === 1 ? "experiência" : "experiências"}</span>;
 }
