@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Cê vai",
-  "short_name": "Cê vai",
+  "name": "Cê Vai?",
+  "short_name": "Cê Vai?",
   "description": "Descubra, salve e registre lugares em Goiânia.",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -9,10 +9,30 @@
   "background_color": "#F7F6F2",
   "theme_color": "#123A32",
   "handle_links": "preferred",
-  "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
+  "launch_handler": {
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/cevai-icon-v2-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/cevai-icon-v2-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/cevai-icon-v2-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

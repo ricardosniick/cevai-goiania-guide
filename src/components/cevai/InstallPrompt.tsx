@@ -89,7 +89,7 @@ export function InstallPrompt({ shared }: { shared: boolean }) {
     <div className="absolute inset-0 z-[60] flex items-end bg-foreground/40 animate-in fade-in" role="dialog" aria-modal="true" aria-labelledby="install-title">
       <div className="w-full animate-in slide-in-from-bottom rounded-t-3xl bg-background p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div className="flex items-start gap-4">
-          <img src="/icon-192.png" alt="" className="size-14 shrink-0 rounded-2xl shadow" />
+          <img src="/cevai-icon-v2-192.png" alt="" className="size-14 shrink-0 rounded-2xl shadow" />
           <div className="min-w-0 flex-1">
             <h2 id="install-title" className="font-display text-xl font-black">{ios ? "📲 Adicione o Cê vai à sua tela inicial" : "📲 Tenha o Cê vai no seu celular"}</h2>
             {!ios && <p className="mt-1 text-sm text-muted-foreground">Instale o Cê vai para acessar seus lugares, experiências e descobertas de forma rápida.</p>}
