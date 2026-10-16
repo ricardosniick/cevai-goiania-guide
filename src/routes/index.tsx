@@ -152,7 +152,7 @@ function CeVaiApp() {
           {screen === "signup-done" && <SignupDoneScreen confirmed={!!user} onContinue={() => go(user ? "home" : "login")} />}
           {screen === "forgot" && <ForgotScreen onBack={() => go("login", true)} notify={notify} />}
           {screen === "new-password" && <NewPasswordScreen onDone={() => go("home")} notify={notify} />}
-          {screen === "home" && <HomeScreen user={user} center={center} geoReady={geoReady} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} />}
+          {screen === "home" && <HomeScreen user={user} center={center} geoReady={geoReady} category={category} onCategory={setCategory} onOpen={(id) => openPlace(id, "home")} onLogin={() => go("login")} onAll={() => go("categories")} onRegister={openModal} />}
           {screen === "categories" && <CategoriesScreen value={category} onBack={() => go("home", true)} onPick={(k) => { setCategory(k); go("home", true); }} />}
           {screen === "map" && <MapScreen user={user} center={center} location={location} category={category} onCategory={setCategory} onLocate={() => locate(true)} onOpen={(id) => openPlace(id, "map")} onLogin={() => go("login")} />}
           {screen === "detail" && placeId && <DetailScreen placeId={placeId} user={user} center={center} onBack={() => go(returnTo, true)} onRegister={openModal} onLogin={() => go("login")} notify={notify} />}
@@ -349,7 +349,7 @@ function NewPasswordScreen({ onDone, notify }: { onDone: () => void; notify: (m:
 
 /* ---------------- Explorar ---------------- */
 
-function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpen, onLogin, onAll }: { user: User | null; center: LatLng; geoReady?: boolean; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void }) {
+function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpen, onLogin, onAll, onRegister }: { user: User | null; center: LatLng; geoReady?: boolean; category: string | null; onCategory: (c: string | null) => void; onOpen: (id: string) => void; onLogin: () => void; onAll: () => void; onRegister?: (p: PlaceSummary) => void }) {
   const [input, setInput] = useState(""); const [query, setQuery] = useState("");
   useEffect(() => { const t = window.setTimeout(() => setQuery(input.trim()), 500); return () => window.clearTimeout(t); }, [input]);
   // Freeze the search center once location settles; only a later move of more than ~1 km searches again.
@@ -361,7 +361,7 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
     queryKey: ["stall-search", query], enabled: !!user && query.length >= 2,
     queryFn: async () => { const { data } = await supabase.from("fair_stalls").select("id, place_id, name, emoji, fair:places(name)").ilike("name", `%${query.replace(/[%_,()]/g, "")}%`).limit(5); return data ?? []; },
   });
-  const [first, ...rest] = places.data ?? [];
+  const [first, ...rest] = query || category ? places.data ?? [] : highlightOrder(places.data ?? []);
   const stats = usePlaceStats(user, (places.data ?? []).map((p) => p.id));
   return <section className="h-full overflow-y-auto pb-6 pt-[max(1.25rem,env(safe-area-inset-top))]">
     <header className="flex items-start justify-between px-5">
@@ -370,7 +370,7 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
     </header>
     <form onSubmit={(e) => { e.preventDefault(); setQuery(input.trim()); }} className="mx-5 mt-4 flex h-12 items-center gap-3 rounded-full border border-border bg-card px-4 shadow-sm">
       <Search size={18} className="text-muted-foreground" />
-      <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground" placeholder="O que você vai descobrir hoje?" />
+      <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Buscar lugares" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground" placeholder="Buscar um lugar ou categoria" />
       {input && <button type="button" aria-label="Limpar busca" onClick={() => { setInput(""); setQuery(""); }}><X size={18} className="text-muted-foreground" /></button>}
     </form>
     <CategoryChips value={category} onChange={onCategory} chips={HOME_CHIPS} onAll={onAll} className="mt-4" />
@@ -382,14 +382,19 @@ function HomeScreen({ user, center, geoReady = true, category, onCategory, onOpe
       {places.data && places.data.length === 0 && <p className="mx-5 mt-6 rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">Nenhum lugar encontrado. Tente outra busca.</p>}
       {first && <button key={first.id} data-entry-index="0" onClick={() => onOpen(first.id)} className="place-surface mx-5 mt-4 block w-[calc(100%-2.5rem)] overflow-hidden rounded-2xl bg-card text-left">
         <div className="relative h-52"><PlacePhoto src={first.photoUrl} alt={first.name} className="h-full w-full" /><span className="absolute left-3 top-3 rounded-full bg-background/95 px-3 py-1 text-xs font-extrabold text-primary">{emojiOf(first.category)} {first.category}</span>{first.photoAttribution && <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-primary-foreground drop-shadow">Foto: {first.photoAttribution}</span>}</div>
-        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><DistanceText km={distanceKm(center, first)} prefix="· " /></p>{user && <p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} /></p>}</div>
+        <div className="p-4"><p className="font-display text-lg font-black">{first.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground"><MapPin size={14} /><span className="truncate">{first.address}</span></p><p className="mt-2 flex items-center gap-1.5 text-xs font-bold text-foreground/80"><GoogleRating rating={first.rating} size="md" /><DistanceText km={distanceKm(center, first)} prefix="· " /></p>{user && <p className="mt-1"><CeVaiRating stat={stats.data?.[first.id]} onInvite={onRegister && (() => onRegister(first))} /></p>}</div>
       </button>}
       {stallHits.data && stallHits.data.length > 0 && <div className="mt-5 px-5"><p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Barraquinhas cadastradas pela comunidade</p><div className="mt-2 space-y-2">{stallHits.data.map((st) => <button key={st.id} onClick={() => onOpen(st.place_id)} className="flex w-full items-center gap-3 rounded-2xl bg-card p-3 text-left shadow-sm"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted text-xl">{st.emoji}</span><div className="min-w-0"><p className="truncate font-bold">{st.name}</p><p className="truncate text-xs text-muted-foreground">em {st.fair?.name ?? "feira"}</p></div></button>)}</div></div>}
-      <div className="mt-4 space-y-4 px-5">{rest.map((p, index) => <PlaceRow entryIndex={index + 1} key={p.id} place={p} center={center} stat={stats.data?.[p.id]} showCommunity={!!user} onOpen={() => onOpen(p.id)} />)}</div>
+      <div className="mt-4 space-y-4 px-5">{rest.map((p, index) => <PlaceRow entryIndex={index + 1} key={p.id} place={p} center={center} stat={stats.data?.[p.id]} showCommunity={!!user} onOpen={() => onOpen(p.id)} onInvite={onRegister && (() => onRegister(p))} />)}</div>
       {places.data && places.data.length > 0 && <p className="mt-4 px-5 text-center text-[10px] text-muted-foreground">Dados e fotos: Google Maps</p>}
     </>
   </section>;
 }
+
+// Destaques: reorder what was already loaded (no extra Google calls) — leisure first, shopping last.
+const HIGHLIGHT_PRIORITY = [/feira/i, /bar|boteco|pub|cervej/i, /restaurante|comer|churrasc|pizz|lanch/i, /quadra|esporte|t[eê]nis|academia|futebol|parque/i];
+function highlightRank(p: PlaceSummary) { const t = `${p.category} ${p.typeLabel ?? ""}`; if (/shopping|loja/i.test(t)) return 99; const i = HIGHLIGHT_PRIORITY.findIndex((r) => r.test(t)); return i < 0 ? 50 : i; }
+export function highlightOrder(list: PlaceSummary[]) { return list.map((p, i) => ({ p, i })).sort((a, b) => highlightRank(a.p) - highlightRank(b.p) || a.i - b.i).map((x) => x.p); }
 
 function usePlaceStats(user: User | null, ids: string[]) {
   const key = [...ids].sort().join(",");
@@ -411,10 +416,10 @@ function GoogleRating({ rating, count, size = "sm" }: { rating: number | null; c
   return <span className="inline-flex items-center gap-1"><Star size={size === "md" ? 14 : 11} className="fill-secondary text-secondary" />{fmt1(rating)}<span className="rounded-sm bg-muted px-1.5 py-px text-[9px] font-extrabold uppercase tracking-wide text-muted-foreground">Google</span>{count ? <span className="font-semibold text-muted-foreground">({count})</span> : null}</span>;
 }
 
-function PlaceRow({ place, center, stat, showCommunity = true, onOpen, entryIndex }: { entryIndex?: number; place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
+function PlaceRow({ place, center, stat, showCommunity = true, onOpen, onInvite, entryIndex }: { onInvite?: () => void; entryIndex?: number; place: PlaceSummary; center: LatLng; stat?: PlaceStat | undefined; showCommunity?: boolean; onOpen: () => void }) {
   return <button data-entry-index={entryIndex} onClick={onOpen} className="place-surface flex w-full items-center gap-3 rounded-2xl bg-card p-2.5 text-left">
     <PlacePhoto src={place.photoUrl} alt={place.name} className="size-20 shrink-0 rounded-xl" />
-    <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary-ink">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><DistanceText km={distanceKm(center, place)} prefix="· " /></p>{showCommunity && <CeVaiRating stat={stat} />}</div>
+    <div className="min-w-0 flex-1"><p className="text-[11px] font-extrabold text-secondary-ink">{emojiOf(place.category)} {place.typeLabel || place.category}</p><p className="truncate font-display text-base font-black">{place.name}</p><p className="truncate text-xs text-muted-foreground">{place.address}</p><p className="mt-1 flex flex-wrap gap-x-1.5 text-[11px] font-bold text-foreground/70"><GoogleRating rating={place.rating} /><DistanceText km={distanceKm(center, place)} prefix="· " /></p>{showCommunity && <CeVaiRating stat={stat} onInvite={onInvite} />}</div>
     <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
   </button>;
 }
