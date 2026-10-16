@@ -129,7 +129,8 @@ function cacheSet(key: string, url: string) {
   photoCache.set(key, { url, at: Date.now() });
   while (photoCache.size > PHOTO_CACHE_MAX) { const oldest = photoCache.keys().next().value; if (oldest === undefined) break; photoCache.delete(oldest); }
 }
-const PHOTO_NAME_RE = /^places\/[^/]+\/photos\/[^/]+$/;
+// Only bounded URL-safe resource segments; the final assertion requires the true end of input.
+const PHOTO_NAME_RE = /^places\/[A-Za-z0-9_-]{1,300}\/photos\/[A-Za-z0-9_-]{1,2048}(?![\s\S])/;
 
 function headers(fieldMask?: string) {
   const lovableKey = process.env["LOVABLE_API_KEY"];

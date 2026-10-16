@@ -12,39 +12,44 @@ const REASONS: Record<FailureCode, string> = {
 };
 
 type Detail = { stage: string; error?: unknown; status?: number; provider?: unknown };
-// Values removed from every logged string (secret and current token).
-const sensitive: string[] = [];
-function redact(text: string): string {
-  let out = text;
-  for (const v of sensitive) if (v) out = out.split(v).join("[redacted]");
-  return out.slice(0, 300);
-}
-function describeError(error: unknown): { name: string; message: string } {
-  if (error && typeof error === "object") {
-    const e = error as Record<string, unknown>;
-    return { name: redact(String(e["name"] ?? "Error")), message: redact(typeof e["message"] === "string" ? e["message"] : "") };
-  }
-  return { name: typeof error, message: "" };
-}
-function providerSummary(body: unknown) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return { shape: Array.isArray(body) ? "array" : typeof body };
-  const b = body as Record<string, unknown>;
-  const codes = Array.isArray(b["error-codes"]) ? b["error-codes"].filter(c => typeof c === "string").map(c => redact(c as string)) : undefined;
-  return { success: typeof b["success"] === "boolean" ? b["success"] : typeof b["success"], "error-codes": codes };
-}
+type Deny = (code: FailureCode, detail?: Detail) => never;
 
-function deny(code: FailureCode, detail?: Detail): never {
-  // Logs stage, exception name/message (redacted), HTTP status and only success/error-codes.
-  // Never logs secret, token, headers, request body or hostname list.
-  const log: Record<string, unknown> = { reason: REASONS[code] };
-  if (detail) {
-    log["stage"] = detail.stage;
-    if (detail.error !== undefined) log["error"] = describeError(detail.error);
-    if (detail.status !== undefined) log["status"] = detail.status;
-    if (detail.provider !== undefined) log["provider"] = providerSummary(detail.provider);
+/** Keep redaction state local: concurrent requests must never replace each other's credentials. */
+function requestDiagnostics(secret: string | undefined, token: unknown): Deny {
+  const sensitive = [secret, typeof token === "string" ? token : undefined].filter((v): v is string => !!v);
+  function redact(text: string): string {
+    let out = text;
+    for (const v of sensitive) if (v) out = out.split(v).join("[redacted]");
+    return out.slice(0, 300);
   }
-  console.error("[guest-challenge]", code, JSON.stringify(log));
-  throw new Error(`${GUEST_CHALLENGE_MSG} [${code}]`);
+  function describeError(error: unknown): { name: string; message: string } {
+    if (error && typeof error === "object") {
+      const e = error as Record<string, unknown>;
+      return { name: redact(String(e["name"] ?? "Error")), message: redact(typeof e["message"] === "string" ? e["message"] : "") };
+    }
+    return { name: typeof error, message: "" };
+  }
+  function providerSummary(body: unknown) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return { shape: Array.isArray(body) ? "array" : typeof body };
+    const b = body as Record<string, unknown>;
+    const codes = Array.isArray(b["error-codes"]) ? b["error-codes"].filter(c => typeof c === "string").map(c => redact(c as string)) : undefined;
+    return { success: typeof b["success"] === "boolean" ? b["success"] : typeof b["success"], "error-codes": codes };
+  }
+
+  function deny(code: FailureCode, detail?: Detail): never {
+    // Logs stage, exception name/message (redacted), HTTP status and only success/error-codes.
+    // Never logs secret, token, headers, request body or hostname list.
+    const log: Record<string, unknown> = { reason: REASONS[code] };
+    if (detail) {
+      log["stage"] = detail.stage;
+      if (detail.error !== undefined) log["error"] = describeError(detail.error);
+      if (detail.status !== undefined) log["status"] = detail.status;
+      if (detail.provider !== undefined) log["provider"] = providerSummary(detail.provider);
+    }
+    console.error("[guest-challenge]", code, JSON.stringify(log));
+    throw new Error(`${GUEST_CHALLENGE_MSG} [${code}]`);
+  }
+  return deny;
 }
 
 /** Classify only recognized names/codes; never stringify exceptions or copy their messages. */
@@ -64,7 +69,7 @@ function transportFailure(error: unknown, timedOut: boolean): FailureCode {
   return "TS06";
 }
 
-async function siteverify(secret: string, token: string): Promise<unknown> {
+async function siteverify(secret: string, token: string, deny: Deny): Promise<unknown> {
   if (typeof fetch !== "function" || typeof AbortController !== "function") deny("TS20", { stage: "runtime" });
   const controller = new AbortController();
   let timedOut = false;
@@ -99,14 +104,12 @@ async function siteverify(secret: string, token: string): Promise<unknown> {
 export async function verifyGuestChallenge(token: unknown): Promise<void> {
   const secret = process.env["TURNSTILE_SECRET_KEY"];
   const hosts = (process.env["TURNSTILE_ALLOWED_HOSTNAMES"] ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean);
-  sensitive.length = 0;
-  if (secret) sensitive.push(secret);
-  if (typeof token === "string" && token) sensitive.push(token);
+  const deny: Deny = requestDiagnostics(secret, token);
   if (!secret) deny("TS01", { stage: "config" });
   if (!hosts.length) deny("TS02", { stage: "config" });
   if (hosts.some(h => !/^[a-z0-9.-]+$/.test(h))) deny("TS03", { stage: "config" });
   if (typeof token !== "string" || !token.trim() || token.length > 2048) deny("TS04", { stage: "input" });
-  const result = await siteverify(secret, token);
+  const result = await siteverify(secret, token, deny);
   if (!result || typeof result !== "object" || Array.isArray(result)) deny("TS08", { stage: "response_shape", provider: result });
   const proof = result as Record<string, unknown>;
   if (proof["success"] !== true) {

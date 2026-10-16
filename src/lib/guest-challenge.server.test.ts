@@ -174,3 +174,22 @@ describe("server-side guest proof", () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+
+it("keeps each request's token and secret redacted during overlapping verification", async () => {
+  vi.stubEnv("TURNSTILE_SECRET_KEY", "synthetic-secret-A");
+  let rejectFirst!: (reason: Error) => void;
+  request.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(proof())));
+  const first = expect(verifyGuestChallenge("synthetic-token-A")).rejects.toThrow("[TS06]");
+  vi.stubEnv("TURNSTILE_SECRET_KEY", "synthetic-secret-B");
+  await verifyGuestChallenge("synthetic-token-B");
+  rejectFirst(new Error("request failed synthetic-token-A synthetic-secret-A"));
+  await first;
+  const logs = JSON.stringify(vi.mocked(console.error).mock.calls);
+  expect(logs).toContain("[redacted]");
+  expect(logs).not.toContain("synthetic-token-A");
+  expect(logs).not.toContain("synthetic-secret-A");
+  expect(logs).not.toContain("synthetic-token-B");
+  expect(logs).not.toContain("synthetic-secret-B");
+});
